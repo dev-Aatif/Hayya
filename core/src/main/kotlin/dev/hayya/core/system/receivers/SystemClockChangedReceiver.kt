@@ -78,7 +78,7 @@ open class SystemClockChangedReceiver : BroadcastReceiver() {
                 if (wakeLock.isHeld) {
                     wakeLock.release()
                 }
-                pendingResult.finish()
+                pendingResult?.finish()
             }
         }
     }

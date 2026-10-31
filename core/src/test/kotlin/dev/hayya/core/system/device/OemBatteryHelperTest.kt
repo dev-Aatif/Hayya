@@ -1,11 +1,14 @@
 package dev.hayya.core.system.device
 
 import android.content.Context
+import android.net.Uri
 import android.os.PowerManager
 import android.provider.Settings
 import com.google.common.truth.Truth.assertThat
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.mockkStatic
+import io.mockk.unmockkAll
 import org.junit.Test
 
 class OemBatteryHelperTest {
@@ -25,6 +28,12 @@ class OemBatteryHelperTest {
 
     @Test
     fun createIgnoreBatteryOptimizationIntent_hasCorrectActionAndPackageData() {
+        mockkStatic(Uri::class)
+        val mockUri = mockk<Uri>(relaxed = true) {
+            every { scheme } returns "package"
+            every { schemeSpecificPart } returns "dev.hayya.test"
+        }
+        every { Uri.parse("package:dev.hayya.test") } returns mockUri
         every { context.packageName } returns "dev.hayya.test"
 
         val intent = OemBatteryHelper.createIgnoreBatteryOptimizationIntent(context)
@@ -32,6 +41,8 @@ class OemBatteryHelperTest {
         assertThat(intent.action).isEqualTo(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
         assertThat(intent.data?.scheme).isEqualTo("package")
         assertThat(intent.data?.schemeSpecificPart).isEqualTo("dev.hayya.test")
+
+        unmockkAll()
     }
 
     @Test

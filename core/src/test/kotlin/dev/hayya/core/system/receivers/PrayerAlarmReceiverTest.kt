@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.PowerManager
 import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.ContextCompat
 import com.google.common.truth.Truth.assertThat
 import dev.hayya.core.domain.model.AlertTier
 import dev.hayya.core.domain.model.PrayerType
@@ -33,7 +34,9 @@ class PrayerAlarmReceiverTest {
     @Before
     fun setUp() {
         mockkStatic(NotificationManagerCompat::class)
+        mockkStatic(ContextCompat::class)
         every { NotificationManagerCompat.from(any()) } returns notificationManagerCompat
+        every { ContextCompat.startForegroundService(any(), any()) } returns null
         every { context.getSystemService(Context.POWER_SERVICE) } returns powerManager
         every { context.getSystemService(Context.NOTIFICATION_SERVICE) } returns notificationManager
         every { powerManager.newWakeLock(any(), any()) } returns wakeLock
@@ -114,7 +117,7 @@ class PrayerAlarmReceiverTest {
         val serviceIntentSlot = slot<Intent>()
 
         every {
-            context.startForegroundService(capture(serviceIntentSlot))
+            ContextCompat.startForegroundService(context, capture(serviceIntentSlot))
         } returns null
 
         val intent = Intent(PrayerAlarmScheduler.ACTION_TRIGGER_PRAYER_ALARM).apply {
@@ -126,7 +129,7 @@ class PrayerAlarmReceiverTest {
         receiver.onReceive(context, intent)
 
         verify(atLeast = 1) {
-            context.startForegroundService(any())
+            ContextCompat.startForegroundService(context, any())
         }
 
         assertThat(serviceIntentSlot.captured.action).isEqualTo(PrayerAudioService.ACTION_START_ALARM)

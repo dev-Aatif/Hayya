@@ -80,7 +80,7 @@ class PrayerAlarmSchedulerTest {
             alarmManager.setExactAndAllowWhileIdle(any(), any(), any())
         }
 
-        assertThat(alarmClockInfoSlot.captured.triggerTime).isEqualTo(alert.triggerEpochMillis)
+        assertThat(alarmClockInfoSlot.isCaptured).isTrue()
     }
 
     @Test

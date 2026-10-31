@@ -48,7 +48,8 @@ dependencies {
     // Jetpack DataStore Preferences
     implementation("androidx.datastore:datastore-preferences:1.1.1")
 
-    // Core Android annotations
+    // AndroidX Core & Annotations
+    implementation("androidx.core:core-ktx:1.15.0")
     implementation("androidx.annotation:annotation:1.9.1")
 
     // Unit Testing

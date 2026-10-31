@@ -1,0 +1,12 @@
+## Local Android SDK configuration template.
+# Set sdk.dir to your Android SDK path, or open the project in Android Studio to auto-generate.
+#
+# Linux default:
+# sdk.dir=/home/archon/Android/Sdk
+#
+# macOS default:
+# sdk.dir=/Users/<username>/Library/Android/sdk
+#
+# Windows default:
+# sdk.dir=C\:\\Users\\<username>\\AppData\\Local\\Android\\Sdk
+sdk.dir=/home/archon/Android/Sdk

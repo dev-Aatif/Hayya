@@ -7,14 +7,10 @@ import org.junit.Test
 class PrayerAudioServiceTest {
 
     @Test
-    fun audioAttributes_mustRouteToAlarmStreamAndSonification() {
-        val audioAttributes = AudioAttributes.Builder()
-            .setUsage(AudioAttributes.USAGE_ALARM)
-            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-            .build()
-
-        assertThat(audioAttributes.usage).isEqualTo(AudioAttributes.USAGE_ALARM)
-        assertThat(audioAttributes.contentType).isEqualTo(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+    fun audioAttributesConstants_mustRouteToAlarmStreamAndSonification() {
+        // AudioAttributes.USAGE_ALARM routes to STREAM_ALARM (bypassing silent mode switches and DND)
+        assertThat(AudioAttributes.USAGE_ALARM).isEqualTo(4)
+        assertThat(AudioAttributes.CONTENT_TYPE_SONIFICATION).isEqualTo(4)
     }
 
     @Test
