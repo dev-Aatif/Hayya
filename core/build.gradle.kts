@@ -41,8 +41,8 @@ android {
 }
 
 dependencies {
-    // Batoul Apps adhan2 (Kotlin Multiplatform / Android)
-    implementation("com.batoulapps.adhan:adhan2:0.0.7")
+    // Batoul Apps adhan (Pure Java / Android library, no Kotlin binary metadata version conflicts)
+    implementation("com.batoulapps.adhan:adhan:1.2.1")
 
     // kotlinx-datetime (minSdk 26+ native java.time backing)
     implementation("org.jetbrains.kotlinx:kotlinx-datetime:0.6.0")

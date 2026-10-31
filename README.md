@@ -16,7 +16,7 @@ dev.hayya.core/
 │   │   └── PreferenceModels.kt         # CalculationMethodOption, MadhabOption, UserPreferences
 │   └── calculation/
 │       ├── AstronomicalCalculator.kt   # Pluggable astronomical provider interface
-│       ├── AdhanAstronomicalCalculator.kt # Wrapper over Batoul Apps adhan-kotlin (KMP)
+│       ├── AdhanAstronomicalCalculator.kt # Wrapper over Batoul Apps adhan (Java/Android)
 │       ├── SolarAstronomicalCalculator.kt # Pure Kotlin offline astronomical solver (Jean Meeus)
 │       └── PrayerCalculationEngine.kt  # Window resolver, 3-tier triggers, 7-day rolling queue
 ├── data/

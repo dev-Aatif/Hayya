@@ -24,12 +24,12 @@ class AdhanAstronomicalCalculator : AstronomicalCalculator {
         val prayerTimes = PrayerTimes(coordinates, dateComponents, parameters)
 
         return RawPrayerTimes(
-            fajrEpochMillis = prayerTimes.fajr.toEpochMilliseconds(),
-            sunriseEpochMillis = prayerTimes.sunrise.toEpochMilliseconds(),
-            dhuhrEpochMillis = prayerTimes.dhuhr.toEpochMilliseconds(),
-            asrEpochMillis = prayerTimes.asr.toEpochMilliseconds(),
-            maghribEpochMillis = prayerTimes.maghrib.toEpochMilliseconds(),
-            ishaEpochMillis = prayerTimes.isha.toEpochMilliseconds()
+            fajrEpochMillis = prayerTimes.fajr?.time ?: 0L,
+            sunriseEpochMillis = prayerTimes.sunrise?.time ?: 0L,
+            dhuhrEpochMillis = prayerTimes.dhuhr?.time ?: 0L,
+            asrEpochMillis = prayerTimes.asr?.time ?: 0L,
+            maghribEpochMillis = prayerTimes.maghrib?.time ?: 0L,
+            ishaEpochMillis = prayerTimes.isha?.time ?: 0L
         )
     }
 }

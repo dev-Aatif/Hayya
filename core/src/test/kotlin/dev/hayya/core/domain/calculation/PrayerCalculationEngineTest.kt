@@ -48,6 +48,24 @@ class PrayerCalculationEngineTest {
     }
 
     @Test
+    fun adhanAstronomicalCalculator_computesValidTimes() {
+        val adhanEngine = PrayerCalculationEngine(AdhanAstronomicalCalculator())
+        val times = adhanEngine.computeDailyTimes(
+            date = fixedDate,
+            coordinates = karachiCoords,
+            method = CalculationMethod.KARACHI,
+            madhab = Madhab.HANAFI
+        )
+
+        assertThat(times.fajr).isLessThan(times.sunrise)
+        assertThat(times.sunrise).isLessThan(times.dhuhr)
+        assertThat(times.dhuhr).isLessThan(times.asr)
+        assertThat(times.asr).isLessThan(times.maghrib)
+        assertThat(times.maghrib).isLessThan(times.isha)
+        assertThat(times.isha).isLessThan(times.nextDayFajr)
+    }
+
+    @Test
     fun computeDailyTimes_london_hasChronologicalOrder() {
         val times = engine.computeDailyTimes(
             date = fixedDate,
