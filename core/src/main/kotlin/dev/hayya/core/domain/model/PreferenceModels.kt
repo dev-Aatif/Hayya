@@ -24,59 +24,101 @@ data class GeoLocation(
  */
 enum class CalculationMethodOption(
     val displayName: String,
-    val description: String
+    val description: String,
+    val defaultCity: String,
+    val defaultLatitude: Double,
+    val defaultLongitude: Double
 ) {
     MUSLIM_WORLD_LEAGUE(
         "Muslim World League (MWL)",
-        "Standard for Europe, Far East, and parts of the Americas. Fajr: 18°, Isha: 17°."
+        "Standard method for Europe, the Far East, and parts of the Americas. Evaluates Fajr at 18.0° and Isha at 17.0° twilight angles.",
+        "Makkah / International",
+        21.4225,
+        39.8262
     ),
     NORTH_AMERICA(
         "ISNA (North America)",
-        "Islamic Society of North America. Fajr: 15°, Isha: 15°."
+        "Islamic Society of North America convention widely followed in the United States and Canada. Evaluates both Fajr and Isha at 15.0° twilight angles.",
+        "New York, USA",
+        40.7128,
+        -74.0060
     ),
     EGYPTIAN(
         "Egyptian General Authority of Survey",
-        "Standard for Egypt, Sudan, Levant, and Africa. Fajr: 19.5°, Isha: 17.5°."
+        "Standard method across Egypt, Sudan, the Levant, and North/East Africa. Evaluates Fajr at 19.5° and Isha at 17.5° twilight angles.",
+        "Cairo, Egypt",
+        30.0444,
+        31.2357
     ),
     UMM_AL_QURA(
         "Umm al-Qura University (Makkah)",
-        "Official Saudi Arabia standard. Fajr: 18.5°, Isha: 90 min after Maghrib (120 in Ramadan)."
+        "Official standard of the Kingdom of Saudi Arabia and the Arabian Peninsula. Evaluates Fajr at 18.5° and Isha fixed at 90 minutes after Maghrib (120 minutes during Ramadan).",
+        "Makkah, Saudi Arabia",
+        21.4225,
+        39.8262
     ),
     KARACHI(
         "University of Islamic Sciences, Karachi",
-        "Standard for Pakistan, India, Bangladesh, and Afghanistan. Fajr: 18°, Isha: 18°."
+        "Standard method across Pakistan, India, Bangladesh, and Afghanistan. Evaluates both Fajr and Isha at 18.0° twilight angles.",
+        "Karachi, Pakistan",
+        24.8607,
+        67.0011
     ),
     DUBAI(
         "Dubai (UAE)",
-        "United Arab Emirates official calculation method."
+        "Official calculation standard for the United Arab Emirates. Evaluates Fajr at 18.2° and Isha at 18.2° twilight angles.",
+        "Dubai, UAE",
+        25.2048,
+        55.2708
     ),
     QATAR(
         "Qatar",
-        "Qatar official calculation method."
+        "Official Ministry of Awqaf standard for the State of Qatar. Evaluates Fajr at 18.0° and Isha fixed at 90 minutes after Maghrib.",
+        "Doha, Qatar",
+        25.2854,
+        51.5310
     ),
     KUWAIT(
         "Kuwait",
-        "Kuwait official calculation method."
+        "Official Ministry of Awqaf standard for Kuwait. Evaluates Fajr at 18.0° and Isha at 17.5° twilight angles.",
+        "Kuwait City, Kuwait",
+        29.3759,
+        47.9774
     ),
     SINGAPORE(
         "Singapore (MUIS)",
-        "Majlis Ugama Islam Singapura standard."
+        "Official Majlis Ugama Islam Singapura standard. Evaluates Fajr at 20.0° and Isha at 18.0° twilight angles.",
+        "Singapore",
+        1.3521,
+        103.8198
     ),
     MOON_SIGHTING_COMMITTEE(
         "Moonsighting Committee Worldwide",
-        "Moonsighting Committee calculation method."
+        "Global moonsighting standard using 18.0° for Fajr and Isha with specialized seasonal twilight adjustments for higher latitudes.",
+        "Moonsighting Global",
+        41.8781,
+        -87.6298
     ),
     TEHRAN(
         "Institute of Geophysics, University of Tehran",
-        "Shia Ithna Ashari standard in Iran. Fajr: 17.7°, Maghrib: 4.5°, Isha: 14°."
+        "Official Shia Ithna Ashari standard in Iran. Evaluates Fajr at 17.7°, Maghrib at 4.5°, and Isha at 14.0° twilight angles.",
+        "Tehran, Iran",
+        35.6892,
+        51.3890
     ),
     JAFARI(
         "Shia Ithna Ashari (Leva Institute, Qum)",
-        "Fajr: 16°, Maghrib: 4°, Isha: 14°."
+        "Shia Ithna Ashari standard according to the Leva Research Institute. Evaluates Fajr at 16.0°, Maghrib at 4.0°, and Isha at 14.0°.",
+        "Qom, Iran",
+        34.6401,
+        50.8764
     ),
     OTHER(
-        "Custom Parameters",
-        "User-defined custom astronomical parameters."
+        "Custom / Regional Parameters",
+        "User-configured astronomical angles and manual interval adjustments.",
+        "Custom Location",
+        21.4225,
+        39.8262
     );
 
     fun toAdhanMethod(): CalculationMethod = when (this) {
@@ -183,7 +225,9 @@ data class UserPreferences(
     val alertModes: Map<PrayerType, AlertMode> = PrayerType.entries.associateWith { prayer ->
         if (prayer == PrayerType.SUNRISE) AlertMode.GENTLE_BANNER else AlertMode.FULL_ALARM
     },
-    val autoSilenceTimeout: AutoSilenceTimeout = AutoSilenceTimeout.SECONDS_60
+    val autoSilenceTimeout: AutoSilenceTimeout = AutoSilenceTimeout.SECONDS_60,
+    val preReminderEnabled: Boolean = true,
+    val lastCallEnabled: Boolean = true
 ) {
     fun getOffset(prayer: PrayerType): Int = manualMinuteOffsets[prayer] ?: 0
 

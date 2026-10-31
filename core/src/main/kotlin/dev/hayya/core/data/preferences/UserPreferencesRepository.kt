@@ -36,6 +36,8 @@ object PreferenceKeys {
     val ISHA_EXPIRES_AT_MIDNIGHT = booleanPreferencesKey("pref_isha_expires_at_midnight")
 
     val AUTO_SILENCE_TIMEOUT = stringPreferencesKey("pref_auto_silence_timeout")
+    val PRE_REMINDER_ENABLED = booleanPreferencesKey("pref_pre_reminder_enabled")
+    val LAST_CALL_ENABLED = booleanPreferencesKey("pref_last_call_enabled")
 
     fun offsetKeyFor(prayer: PrayerType): Preferences.Key<Int> =
         intPreferencesKey("pref_offset_${prayer.name.lowercase()}")
@@ -123,6 +125,24 @@ class UserPreferencesRepository(
     suspend fun updateIshaExpiresAtMidnight(expiresAtMidnight: Boolean) {
         dataStore.edit { prefs ->
             prefs[PreferenceKeys.ISHA_EXPIRES_AT_MIDNIGHT] = expiresAtMidnight
+        }
+    }
+
+    /**
+     * Updates Pre-Reminder (Tier 1: T - 15m) toggle.
+     */
+    suspend fun updatePreReminderEnabled(enabled: Boolean) {
+        dataStore.edit { prefs ->
+            prefs[PreferenceKeys.PRE_REMINDER_ENABLED] = enabled
+        }
+    }
+
+    /**
+     * Updates Last Call (Tier 3: Window - 20m) toggle.
+     */
+    suspend fun updateLastCallEnabled(enabled: Boolean) {
+        dataStore.edit { prefs ->
+            prefs[PreferenceKeys.LAST_CALL_ENABLED] = enabled
         }
     }
 
@@ -232,6 +252,9 @@ class UserPreferencesRepository(
             runCatching { AutoSilenceTimeout.valueOf(name) }.getOrNull()
         } ?: AutoSilenceTimeout.SECONDS_60
 
+        val preReminderEnabled = preferences[PreferenceKeys.PRE_REMINDER_ENABLED] ?: true
+        val lastCallEnabled = preferences[PreferenceKeys.LAST_CALL_ENABLED] ?: true
+
         return UserPreferences(
             location = GeoLocation(lat, lng, alt, locationName),
             calculationMethod = calculationMethod,
@@ -240,7 +263,9 @@ class UserPreferencesRepository(
             ishaExpiresAtMidnight = ishaExpiresAtMidnight,
             manualMinuteOffsets = offsets,
             alertModes = alertModes,
-            autoSilenceTimeout = autoSilenceTimeout
+            autoSilenceTimeout = autoSilenceTimeout,
+            preReminderEnabled = preReminderEnabled,
+            lastCallEnabled = lastCallEnabled
         )
     }
 }

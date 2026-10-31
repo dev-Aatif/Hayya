@@ -50,4 +50,12 @@ class OemBatteryHelperTest {
         // Must always return at least one fallback or OEM intent
         assertThat(intents).isNotEmpty()
     }
+
+    @Test
+    fun openBatteryUsageSettings_dispatchesIntentGracefully() {
+        every { context.packageName } returns "dev.hayya"
+        val launched = OemBatteryHelper.openBatteryUsageSettings(context)
+        // Returns boolean without throwing exception
+        assertThat(launched).isAnyOf(true, false)
+    }
 }

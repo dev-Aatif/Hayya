@@ -92,16 +92,22 @@ class PrayerAlarmScheduler(
             currentEpochMillis = currentEpochMillis
         )
 
-        for (alert in alertsToSchedule) {
+        val filteredAlerts = alertsToSchedule.filter { alert ->
+            if (alert.tier == AlertTier.PRE_REMINDER && !userPrefs.preReminderEnabled) return@filter false
+            if (alert.tier == AlertTier.LAST_CALL && !userPrefs.lastCallEnabled) return@filter false
+            true
+        }
+
+        for (alert in filteredAlerts) {
             scheduleSingleAlert(alert)
         }
 
         Log.i(
             TAG,
-            "Successfully scheduled ${alertsToSchedule.size} rolling prayer alarms starting $effectiveStartDate"
+            "Successfully scheduled ${filteredAlerts.size} rolling prayer alarms starting $effectiveStartDate"
         )
 
-        return alertsToSchedule
+        return filteredAlerts
     }
 
     /**
@@ -148,6 +154,52 @@ class PrayerAlarmScheduler(
             alarmManager.setAlarmClock(alarmClockInfo, pendingIntent)
         } catch (se: SecurityException) {
             Log.e(TAG, "SecurityException while scheduling exact alarm clock for notificationId $requestCode", se)
+        }
+    }
+
+    /**
+     * Schedules a simulated test alarm to trigger [delaySeconds] from now.
+     * Allows the user to test the real background alarm, WakeLock, AudioService, and Lockscreen Wake screen.
+     */
+    fun scheduleTestAlarm(delaySeconds: Int, prayerType: PrayerType = PrayerType.ASR) {
+        val triggerMillis = System.currentTimeMillis() + (delaySeconds * 1000L)
+        val testNotificationId = 999999
+
+        val operationIntent = Intent(context, PrayerAlarmReceiver::class.java).apply {
+            action = ACTION_TRIGGER_PRAYER_ALARM
+            putExtra(EXTRA_NOTIFICATION_ID, testNotificationId)
+            putExtra(EXTRA_PRAYER_TYPE, prayerType.name)
+            putExtra(EXTRA_ALERT_TIER, AlertTier.MAIN_CALL.name)
+            putExtra(EXTRA_TRIGGER_MILLIS, triggerMillis)
+        }
+
+        val pendingIntent = PendingIntent.getBroadcast(
+            context,
+            testNotificationId,
+            operationIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val showIntent = Intent(context, PrayerWakeActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            putExtra(EXTRA_NOTIFICATION_ID, testNotificationId)
+            putExtra(EXTRA_PRAYER_TYPE, prayerType.name)
+            putExtra(EXTRA_ALERT_TIER, AlertTier.MAIN_CALL.name)
+        }
+
+        val showPendingIntent = PendingIntent.getActivity(
+            context,
+            testNotificationId,
+            showIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val alarmClockInfo = AlarmManager.AlarmClockInfo(triggerMillis, showPendingIntent)
+        try {
+            alarmManager.setAlarmClock(alarmClockInfo, pendingIntent)
+            Log.i(TAG, "Scheduled test alarm in $delaySeconds seconds ($triggerMillis)")
+        } catch (se: SecurityException) {
+            Log.e(TAG, "SecurityException scheduling test alarm", se)
         }
     }
 

@@ -72,6 +72,56 @@ object OemBatteryHelper {
     }
 
     /**
+     * Directly navigates to the app's Battery usage / App info screen where
+     * "Unrestricted", "Optimized", and "Restricted" radio options reside.
+     */
+    fun openBatteryUsageSettings(context: Context): Boolean {
+        // 1. Android 12+ (API 31+) dedicated App Battery Usage page
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            try {
+                val batteryUsageIntent = Intent("android.settings.APP_BATTERY_USAGE_SETTINGS").apply {
+                    data = Uri.parse("package:${context.packageName}")
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                }
+                if (batteryUsageIntent.resolveActivity(context.packageManager) != null) {
+                    context.startActivity(batteryUsageIntent)
+                    Log.i(TAG, "Launched APP_BATTERY_USAGE_SETTINGS directly")
+                    return true
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "APP_BATTERY_USAGE_SETTINGS intent failed", e)
+            }
+        }
+
+        // 2. Settings > Apps > App Info > Hayya (where Battery is 1 tap away)
+        try {
+            val appDetailsIntent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                data = Uri.parse("package:${context.packageName}")
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            }
+            if (appDetailsIntent.resolveActivity(context.packageManager) != null) {
+                context.startActivity(appDetailsIntent)
+                Log.i(TAG, "Launched ACTION_APPLICATION_DETAILS_SETTINGS")
+                return true
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "ACTION_APPLICATION_DETAILS_SETTINGS intent failed", e)
+        }
+
+        // 3. Fallback to general Ignore Battery Optimization list
+        return try {
+            val listIntent = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            }
+            context.startActivity(listIntent)
+            true
+        } catch (e: Exception) {
+            Log.w(TAG, "Fallback to OEM autostart settings", e)
+            launchAutostartSettings(context)
+        }
+    }
+
+    /**
      * Attempts to launch the manufacturer-specific autostart or background restriction screen.
      * Falls back to general App Details Settings if OEM-specific screens cannot be resolved.
      *

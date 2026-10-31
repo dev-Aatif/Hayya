@@ -88,6 +88,43 @@
             android:launchMode="singleTask"
             android:theme="@android:style/Theme.Translucent.NoTitleBar" />
 
+        <!-- Glance AppWidget: Compact 2x2 Prayer Widget -->
+        <receiver
+            android:name=".widget.CompactPrayerWidgetReceiver"
+            android:label="@string/widget_compact_name"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="dev.hayya.widget.ACTION_PRAYER_DATA_CHANGED" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/compact_prayer_widget_info" />
+        </receiver>
+
+        <!-- Glance AppWidget: Full 4x2 Timetable Widget -->
+        <receiver
+            android:name=".widget.FullTimetableWidgetReceiver"
+            android:label="@string/widget_timetable_name"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="dev.hayya.widget.ACTION_PRAYER_DATA_CHANGED" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/full_timetable_widget_info" />
+        </receiver>
+
+        <!-- General Widget Data Sync Receiver -->
+        <receiver
+            android:name=".widget.PrayerWidgetReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="dev.hayya.widget.ACTION_PRAYER_DATA_CHANGED" />
+            </intent-filter>
+        </receiver>
+
     </application>
 
 </manifest>

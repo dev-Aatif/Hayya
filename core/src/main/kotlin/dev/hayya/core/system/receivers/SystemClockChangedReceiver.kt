@@ -71,6 +71,7 @@ open class SystemClockChangedReceiver : BroadcastReceiver() {
                 Log.d(TAG, "Cancelling outdated alarms and scheduling fresh rolling batch")
                 scheduler.cancelAllScheduledAlarms()
                 scheduler.scheduleRollingAlarms()
+                dev.hayya.core.widget.PrayerWidgetUpdater.updateAllWidgets(context)
                 Log.i(TAG, "Successfully refreshed rolling alarms following $action")
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to reschedule alarms after $action", e)

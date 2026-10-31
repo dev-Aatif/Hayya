@@ -152,4 +152,37 @@ class PrayerAlarmSchedulerTest {
             mockPendingIntent.cancel()
         }
     }
+
+    @Test
+    fun scheduleTestAlarm_setsAlarmClockWithSpecifiedDelay() {
+        val delaySeconds = 15
+        val clockInfoSlot = slot<AlarmManager.AlarmClockInfo>()
+
+        scheduler.scheduleTestAlarm(delaySeconds, PrayerType.DHUHR)
+
+        verify(atLeast = 1) {
+            alarmManager.setAlarmClock(capture(clockInfoSlot), any())
+        }
+        assertThat(clockInfoSlot.isCaptured).isTrue()
+    }
+
+    @Test
+    fun scheduleRollingAlarms_filtersOutTiersWhenDisabled() = runTest {
+        val startDate = LocalDate(2026, 6, 1)
+        val preferences = UserPreferences(
+            preReminderEnabled = false,
+            lastCallEnabled = false
+        )
+
+        val scheduledAlerts = scheduler.scheduleRollingAlarms(
+            preferences = preferences,
+            startDate = startDate,
+            daysAhead = 7,
+            currentEpochMillis = 0L
+        )
+
+        // Only Tier 2 (Main Call) scheduled: 7 days * 5 prayers * 1 tier = 35 alarms
+        assertThat(scheduledAlerts).hasSize(35)
+        assertThat(scheduledAlerts.all { it.tier == AlertTier.MAIN_CALL }).isTrue()
+    }
 }

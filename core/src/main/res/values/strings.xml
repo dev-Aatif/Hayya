@@ -1,4 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Hayya</string>
+    <string name="widget_compact_name">Hayya Next Prayer</string>
+    <string name="widget_compact_description">Compact 2x2 upcoming prayer countdown</string>
+    <string name="widget_timetable_name">Hayya Full Timetable</string>
+    <string name="widget_timetable_description">Wide 4x2 prayer timetable with live countdown</string>
 </resources>

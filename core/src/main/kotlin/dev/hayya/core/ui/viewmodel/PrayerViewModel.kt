@@ -9,6 +9,7 @@ import dev.hayya.core.domain.calculation.PrayerCalculationEngine
 import dev.hayya.core.domain.model.AlertMode
 import dev.hayya.core.domain.model.AutoSilenceTimeout
 import dev.hayya.core.domain.model.CalculationMethodOption
+import dev.hayya.core.domain.model.HighLatitudeRuleOption
 import dev.hayya.core.domain.model.MadhabOption
 import dev.hayya.core.domain.model.PrayerType
 import dev.hayya.core.domain.model.PrayerWindow
@@ -151,12 +152,64 @@ class PrayerViewModel(
     }
 
     /**
-     * Updates calculation method convention.
+     * Updates Pre-Reminder (Tier 1: T - 15m) notification preference.
+     */
+    fun togglePreReminder(enabled: Boolean) {
+        viewModelScope.launch {
+            preferencesRepository.updatePreReminderEnabled(enabled)
+            alarmScheduler?.scheduleRollingAlarms(preferences = currentPreferences.copy(preReminderEnabled = enabled))
+        }
+    }
+
+    /**
+     * Updates Last Call (Tier 3: Window - 20m) notification preference.
+     */
+    fun toggleLastCall(enabled: Boolean) {
+        viewModelScope.launch {
+            preferencesRepository.updateLastCallEnabled(enabled)
+            alarmScheduler?.scheduleRollingAlarms(preferences = currentPreferences.copy(lastCallEnabled = enabled))
+        }
+    }
+
+    /**
+     * Updates High Latitude twilight adjustment rule.
+     */
+    fun updateHighLatitudeRule(rule: HighLatitudeRuleOption) {
+        viewModelScope.launch {
+            preferencesRepository.updateHighLatitudeRule(rule)
+            alarmScheduler?.scheduleRollingAlarms(preferences = currentPreferences.copy(highLatitudeRule = rule))
+        }
+    }
+
+    /**
+     * Schedules an instant or countdown-based test prayer alarm.
+     */
+    fun scheduleTestAlarm(delaySeconds: Int) {
+        alarmScheduler?.scheduleTestAlarm(delaySeconds, _uiState.value.nextPrayerType)
+    }
+
+    /**
+     * Updates calculation method convention and syncs reference city coordinates.
      */
     fun updateCalculationMethod(method: CalculationMethodOption) {
         viewModelScope.launch {
             preferencesRepository.updateCalculationMethod(method)
-            alarmScheduler?.scheduleRollingAlarms(preferences = currentPreferences.copy(calculationMethod = method))
+            // Synchronize reference location to the method's canonical city
+            preferencesRepository.updateCoordinates(
+                latitude = method.defaultLatitude,
+                longitude = method.defaultLongitude,
+                locationName = method.defaultCity
+            )
+            alarmScheduler?.scheduleRollingAlarms(
+                preferences = currentPreferences.copy(
+                    calculationMethod = method,
+                    location = currentPreferences.location.copy(
+                        latitude = method.defaultLatitude,
+                        longitude = method.defaultLongitude,
+                        resolvedLocationName = method.defaultCity
+                    )
+                )
+            )
         }
     }
 

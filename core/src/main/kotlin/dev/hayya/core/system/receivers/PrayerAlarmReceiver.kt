@@ -19,6 +19,9 @@ import dev.hayya.core.domain.model.PrayerType
 import dev.hayya.core.system.alarm.PrayerAlarmScheduler
 import dev.hayya.core.system.audio.PrayerAudioService
 import dev.hayya.core.system.ui.PrayerWakeActivity
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 /**
  * High-priority BroadcastReceiver triggered by [android.app.AlarmManager.setAlarmClock].
@@ -71,6 +74,11 @@ class PrayerAlarmReceiver : BroadcastReceiver() {
                 AlertTier.LAST_CALL -> {
                     handleLastCall(context, notificationId, prayerType)
                 }
+            }
+
+            // Instantly refresh Glance AppWidgets when any prayer transition occurs
+            CoroutineScope(Dispatchers.Default).launch {
+                dev.hayya.core.widget.PrayerWidgetUpdater.updateAllWidgets(context)
             }
         } catch (e: Exception) {
             Log.e(TAG, "Exception during prayer alarm dispatch", e)
