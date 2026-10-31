@@ -54,6 +54,7 @@ import dev.hayya.core.ui.theme.TabularClockStyle
 import dev.hayya.core.ui.theme.TextMuted
 import dev.hayya.core.ui.theme.TextPrimary
 import dev.hayya.core.ui.theme.TextSecondary
+import dev.hayya.core.ui.theme.TrackBackground
 import dev.hayya.core.ui.theme.WarmSandAccent
 import dev.hayya.core.ui.theme.WarmSandAccentSubtle
 

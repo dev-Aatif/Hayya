@@ -90,8 +90,7 @@ enum class CalculationMethodOption(
         KUWAIT -> CalculationMethod.KUWAIT
         SINGAPORE -> CalculationMethod.SINGAPORE
         MOON_SIGHTING_COMMITTEE -> CalculationMethod.MOON_SIGHTING_COMMITTEE
-        TEHRAN -> CalculationMethod.TEHRAN
-        JAFARI, OTHER -> CalculationMethod.OTHER
+        TEHRAN, JAFARI, OTHER -> CalculationMethod.OTHER
     }
 }
 

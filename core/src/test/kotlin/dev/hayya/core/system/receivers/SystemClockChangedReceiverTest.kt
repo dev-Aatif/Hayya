@@ -41,7 +41,9 @@ class SystemClockChangedReceiverTest {
 
     @Test
     fun onReceive_acquiresWakeLockForSystemClockEvents() {
-        val intent = Intent(Intent.ACTION_TIME_SET)
+        val intent = mockk<Intent>(relaxed = true) {
+            every { action } returns Intent.ACTION_TIME_CHANGED
+        }
 
         receiver.onReceive(context, intent)
 

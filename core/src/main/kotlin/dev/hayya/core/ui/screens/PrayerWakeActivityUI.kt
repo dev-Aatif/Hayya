@@ -28,7 +28,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.outlined.VolumeOff
+import androidx.compose.material.icons.automirrored.outlined.VolumeOff
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
@@ -128,7 +128,7 @@ fun PrayerWakeScreen(
                         .background(TrackBackground)
                 ) {
                     Icon(
-                        imageVector = Icons.Outlined.VolumeOff,
+                        imageVector = Icons.AutoMirrored.Outlined.VolumeOff,
                         contentDescription = "Mute Audio",
                         tint = TextSecondary,
                         modifier = Modifier.size(20.dp)

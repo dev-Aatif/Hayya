@@ -10,9 +10,12 @@ import dev.hayya.core.domain.model.HighLatitudeRuleOption
 import dev.hayya.core.domain.model.MadhabOption
 import dev.hayya.core.domain.model.PrayerType
 import com.google.common.truth.Truth.assertThat
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import org.junit.After
@@ -24,8 +27,7 @@ import java.io.File
 @OptIn(ExperimentalCoroutinesApi::class)
 class UserPreferencesRepositoryTest {
 
-    private val testDispatcher = UnconfinedTestDispatcher()
-    private val testScope = TestScope(testDispatcher)
+    private val dataStoreScope = CoroutineScope(UnconfinedTestDispatcher() + Job())
 
     private lateinit var tempFile: File
     private lateinit var dataStore: DataStore<Preferences>
@@ -35,7 +37,7 @@ class UserPreferencesRepositoryTest {
     fun setUp() {
         tempFile = File.createTempFile("test_preferences", ".preferences_pb")
         dataStore = PreferenceDataStoreFactory.create(
-            scope = testScope,
+            scope = dataStoreScope,
             produceFile = { tempFile }
         )
         repository = UserPreferencesRepository(dataStore)
@@ -43,11 +45,12 @@ class UserPreferencesRepositoryTest {
 
     @After
     fun tearDown() {
+        dataStoreScope.cancel()
         tempFile.delete()
     }
 
     @Test
-    fun defaultPreferences_matchesExpectedDefaults() = testScope.runTest {
+    fun defaultPreferences_matchesExpectedDefaults() = runTest {
         val prefs = repository.userPreferencesFlow.first()
 
         // Default Makkah coordinates
@@ -77,7 +80,7 @@ class UserPreferencesRepositoryTest {
     }
 
     @Test
-    fun updateCoordinates_updatesValuesAndEmitsNewState() = testScope.runTest {
+    fun updateCoordinates_updatesValuesAndEmitsNewState() = runTest {
         repository.updateCoordinates(
             latitude = 24.8607,
             longitude = 67.0011,
@@ -93,23 +96,23 @@ class UserPreferencesRepositoryTest {
     }
 
     @Test
-    fun updateCoordinates_validatesBounds() = testScope.runTest {
+    fun updateCoordinates_validatesBounds() = runTest {
         assertThrows(IllegalArgumentException::class.java) {
-            runTest { repository.updateCoordinates(latitude = 95.0, longitude = 0.0) }
+            runBlocking { repository.updateCoordinates(latitude = 95.0, longitude = 0.0) }
         }
         assertThrows(IllegalArgumentException::class.java) {
-            runTest { repository.updateCoordinates(latitude = -91.0, longitude = 0.0) }
+            runBlocking { repository.updateCoordinates(latitude = -91.0, longitude = 0.0) }
         }
         assertThrows(IllegalArgumentException::class.java) {
-            runTest { repository.updateCoordinates(latitude = 0.0, longitude = 185.0) }
+            runBlocking { repository.updateCoordinates(latitude = 0.0, longitude = 185.0) }
         }
         assertThrows(IllegalArgumentException::class.java) {
-            runTest { repository.updateCoordinates(latitude = 0.0, longitude = -181.0) }
+            runBlocking { repository.updateCoordinates(latitude = 0.0, longitude = -181.0) }
         }
     }
 
     @Test
-    fun updateCalculationMethodAndMadhab_persistsCorrectly() = testScope.runTest {
+    fun updateCalculationMethodAndMadhab_persistsCorrectly() = runTest {
         repository.updateCalculationMethod(CalculationMethodOption.KARACHI)
         repository.updateMadhab(MadhabOption.HANAFI)
         repository.updateHighLatitudeRule(HighLatitudeRuleOption.SEVENTH_OF_THE_NIGHT)
@@ -123,7 +126,7 @@ class UserPreferencesRepositoryTest {
     }
 
     @Test
-    fun updatePrayerOffset_storesOffsetsAndEnforcesBounds() = testScope.runTest {
+    fun updatePrayerOffset_storesOffsetsAndEnforcesBounds() = runTest {
         repository.updatePrayerOffset(PrayerType.FAJR, 15)
         repository.updatePrayerOffset(PrayerType.ASR, -10)
 
@@ -134,15 +137,15 @@ class UserPreferencesRepositoryTest {
 
         // Exceeding bounds throws
         assertThrows(IllegalArgumentException::class.java) {
-            runTest { repository.updatePrayerOffset(PrayerType.FAJR, 31) }
+            runBlocking { repository.updatePrayerOffset(PrayerType.FAJR, 31) }
         }
         assertThrows(IllegalArgumentException::class.java) {
-            runTest { repository.updatePrayerOffset(PrayerType.FAJR, -31) }
+            runBlocking { repository.updatePrayerOffset(PrayerType.FAJR, -31) }
         }
     }
 
     @Test
-    fun updateAlertModeAndAutoSilence_persistsSettings() = testScope.runTest {
+    fun updateAlertModeAndAutoSilence_persistsSettings() = runTest {
         repository.updateAlertMode(PrayerType.FAJR, AlertMode.MUTED)
         repository.updateAlertMode(PrayerType.MAGHRIB, AlertMode.GENTLE_BANNER)
         repository.updateAutoSilenceTimeout(AutoSilenceTimeout.FULL_AUDIO)
@@ -154,7 +157,7 @@ class UserPreferencesRepositoryTest {
     }
 
     @Test
-    fun resetToDefaults_clearsCustomSettings() = testScope.runTest {
+    fun resetToDefaults_clearsCustomSettings() = runTest {
         repository.updateCoordinates(40.7128, -74.0060, locationName = "New York")
         repository.updateCalculationMethod(CalculationMethodOption.NORTH_AMERICA)
         repository.updatePrayerOffset(PrayerType.DHUHR, 10)

@@ -109,13 +109,8 @@ class SolarAstronomicalCalculator : AstronomicalCalculator {
             ishaHoursUtc = sunsetHoursUtc + maxIshaAdjustmentHours
         }
 
-        // Maghrib time (at sunset or custom angle/interval)
-        val maghribHoursUtc = if (parameters.maghribAngle > 0.0) {
-            val maghribHourAngle = computeHourAngle(lat, declinationDeg, -parameters.maghribAngle)
-            noonHoursUtc + (maghribHourAngle / 15.0)
-        } else {
-            sunsetHoursUtc
-        }
+        // Maghrib time (at sunset)
+        val maghribHoursUtc = sunsetHoursUtc
 
         // Convert UTC hours to Epoch Milliseconds for this calendar date
         val baseDateEpochMillis = computeMidnightEpochMillis(date.year, date.monthNumber, date.dayOfMonth)
@@ -212,23 +207,6 @@ class SolarAstronomicalCalculator : AstronomicalCalculator {
     }
 
     private fun computeMidnightEpochMillis(year: Int, month: Int, day: Int): Long {
-        // Calculate UTC epoch millis at 00:00:00 UTC for the given Gregorian date
-        val daysSinceEpoch = computeDaysSinceUnixEpoch(year, month, day)
-        return daysSinceEpoch * 86_400_000L
-    }
-
-    private fun computeDaysSinceUnixEpoch(year: Int, month: Int, day: Int): Long {
-        // Days from 1970-01-01 to year-month-day
-        var y = year.toLong()
-        var m = month.toLong()
-        if (m <= 2) {
-            y -= 1
-            m += 12
-        }
-        val era = if (y >= 0) y / 400 else (y - 399) / 400
-        val yoe = y - era * 400
-        val doy = (153 * (m + 9) + 2) / 5 + day - 1
-        val doe = yoe * 365 + yoe / 4 - yoe / 100 + doy
-        return era * 146097 + doe - 719468
+        return java.time.LocalDate.of(year, month, day).toEpochDay() * 86_400_000L
     }
 }

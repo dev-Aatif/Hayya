@@ -70,10 +70,10 @@ class PrayerCalculationEngine(
         madhab: Madhab = Madhab.SHAFI,
         highLatitudeRule: HighLatitudeRule = HighLatitudeRule.MIDDLE_OF_THE_NIGHT
     ): CalculationParameters {
-        return method.parameters.copy(
-            madhab = madhab,
-            highLatitudeRule = highLatitudeRule
-        )
+        return method.parameters.apply {
+            this.madhab = madhab
+            this.highLatitudeRule = highLatitudeRule
+        }
     }
 
     /**

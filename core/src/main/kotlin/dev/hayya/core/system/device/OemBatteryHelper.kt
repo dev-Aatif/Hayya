@@ -39,7 +39,7 @@ object OemBatteryHelper {
      */
     val currentVendor: OemVendor
         get() {
-            val manufacturer = Build.MANUFACTURER.lowercase()
+            val manufacturer = Build.MANUFACTURER?.lowercase().orEmpty()
             return when {
                 manufacturer.contains("samsung") -> OemVendor.SAMSUNG
                 manufacturer.contains("xiaomi") || manufacturer.contains("redmi") || manufacturer.contains("poco") -> OemVendor.XIAOMI

@@ -3,6 +3,7 @@ package dev.hayya.core.ui.viewmodel
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
+import androidx.lifecycle.viewModelScope
 import com.google.common.truth.Truth.assertThat
 import dev.hayya.core.data.preferences.UserPreferencesRepository
 import dev.hayya.core.domain.calculation.PrayerCalculationEngine
@@ -13,12 +14,14 @@ import dev.hayya.core.domain.model.MadhabOption
 import dev.hayya.core.domain.model.PrayerType
 import dev.hayya.core.system.alarm.PrayerAlarmScheduler
 import io.mockk.mockk
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.StandardTestDispatcher
-import kotlinx.coroutines.test.TestScope
-import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
@@ -32,7 +35,7 @@ import java.io.File
 class PrayerViewModelTest {
 
     private val testDispatcher = StandardTestDispatcher()
-    private val testScope = TestScope(testDispatcher)
+    private val dataStoreScope = CoroutineScope(UnconfinedTestDispatcher() + Job())
 
     private lateinit var tempFile: File
     private lateinit var dataStore: DataStore<Preferences>
@@ -47,7 +50,7 @@ class PrayerViewModelTest {
         Dispatchers.setMain(testDispatcher)
         tempFile = File.createTempFile("test_vm_prefs", ".preferences_pb")
         dataStore = PreferenceDataStoreFactory.create(
-            scope = testScope,
+            scope = dataStoreScope,
             produceFile = { tempFile }
         )
         repository = UserPreferencesRepository(dataStore)
@@ -56,80 +59,97 @@ class PrayerViewModelTest {
 
     @After
     fun tearDown() {
+        dataStoreScope.cancel()
         Dispatchers.resetMain()
         tempFile.delete()
     }
 
     @Test
-    fun initialState_populatesLocationAndAllSixDailyPrayers() = testScope.runTest {
-        testDispatcher.scheduler.advanceUntilIdle()
+    fun initialState_populatesLocationAndAllSixDailyPrayers() = runTest(testDispatcher) {
+        try {
+            testDispatcher.scheduler.runCurrent()
 
-        val state = viewModel.uiState.value
+            val state = viewModel.uiState.value
 
-        assertThat(state.locationName).isNotEmpty()
-        assertThat(state.nextPrayerName).isNotEmpty()
-        assertThat(state.dailyPrayers).hasSize(6)
+            assertThat(state.locationName).isNotEmpty()
+            assertThat(state.nextPrayerName).isNotEmpty()
+            assertThat(state.dailyPrayers).hasSize(6)
 
-        val prayerTypes = state.dailyPrayers.map { it.prayerType }
-        assertThat(prayerTypes).containsExactly(
-            PrayerType.FAJR,
-            PrayerType.SUNRISE,
-            PrayerType.DHUHR,
-            PrayerType.ASR,
-            PrayerType.MAGHRIB,
-            PrayerType.ISHA
-        ).inOrder()
+            val prayerTypes = state.dailyPrayers.map { it.prayerType }
+            assertThat(prayerTypes).containsExactly(
+                PrayerType.FAJR,
+                PrayerType.SUNRISE,
+                PrayerType.DHUHR,
+                PrayerType.ASR,
+                PrayerType.MAGHRIB,
+                PrayerType.ISHA
+            ).inOrder()
 
-        assertThat(state.progressRatio).isIn(com.google.common.collect.Range.closed(0.0f, 1.0f))
+            assertThat(state.progressRatio).isIn(com.google.common.collect.Range.closed(0.0f, 1.0f))
+        } finally {
+            viewModel.viewModelScope.cancel()
+        }
     }
 
     @Test
-    fun togglePrayerAudioMode_cyclesThroughFullAlarmGentleAndMuted() = testScope.runTest {
-        testDispatcher.scheduler.advanceUntilIdle()
+    fun togglePrayerAudioMode_cyclesThroughFullAlarmGentleAndMuted() = runTest(testDispatcher) {
+        try {
+            testDispatcher.scheduler.runCurrent()
 
-        // Initial Fajr is FULL_ALARM by default
-        val initialMode = viewModel.uiState.value.userPreferences.getAlertMode(PrayerType.FAJR)
-        assertThat(initialMode).isEqualTo(AlertMode.FULL_ALARM)
+            // Initial Fajr is FULL_ALARM by default
+            val initialMode = viewModel.uiState.value.userPreferences.getAlertMode(PrayerType.FAJR)
+            assertThat(initialMode).isEqualTo(AlertMode.FULL_ALARM)
 
-        // 1. Toggle -> GENTLE_BANNER
-        viewModel.togglePrayerAudioMode(PrayerType.FAJR)
-        testDispatcher.scheduler.advanceUntilIdle()
-        val mode1 = repository.userPreferencesFlow.first().getAlertMode(PrayerType.FAJR)
-        assertThat(mode1).isEqualTo(AlertMode.GENTLE_BANNER)
+            // 1. Toggle -> GENTLE_BANNER
+            viewModel.togglePrayerAudioMode(PrayerType.FAJR)
+            testDispatcher.scheduler.runCurrent()
+            val mode1 = repository.userPreferencesFlow.first().getAlertMode(PrayerType.FAJR)
+            assertThat(mode1).isEqualTo(AlertMode.GENTLE_BANNER)
 
-        // 2. Toggle -> MUTED
-        viewModel.togglePrayerAudioMode(PrayerType.FAJR)
-        testDispatcher.scheduler.advanceUntilIdle()
-        val mode2 = repository.userPreferencesFlow.first().getAlertMode(PrayerType.FAJR)
-        assertThat(mode2).isEqualTo(AlertMode.MUTED)
+            // 2. Toggle -> MUTED
+            viewModel.togglePrayerAudioMode(PrayerType.FAJR)
+            testDispatcher.scheduler.runCurrent()
+            val mode2 = repository.userPreferencesFlow.first().getAlertMode(PrayerType.FAJR)
+            assertThat(mode2).isEqualTo(AlertMode.MUTED)
 
-        // 3. Toggle -> FULL_ALARM
-        viewModel.togglePrayerAudioMode(PrayerType.FAJR)
-        testDispatcher.scheduler.advanceUntilIdle()
-        val mode3 = repository.userPreferencesFlow.first().getAlertMode(PrayerType.FAJR)
-        assertThat(mode3).isEqualTo(AlertMode.FULL_ALARM)
+            // 3. Toggle -> FULL_ALARM
+            viewModel.togglePrayerAudioMode(PrayerType.FAJR)
+            testDispatcher.scheduler.runCurrent()
+            val mode3 = repository.userPreferencesFlow.first().getAlertMode(PrayerType.FAJR)
+            assertThat(mode3).isEqualTo(AlertMode.FULL_ALARM)
+        } finally {
+            viewModel.viewModelScope.cancel()
+        }
     }
 
     @Test
-    fun updateJuristicMethod_updatesPreferencesState() = testScope.runTest {
-        testDispatcher.scheduler.advanceUntilIdle()
+    fun updateJuristicMethod_updatesPreferencesState() = runTest(testDispatcher) {
+        try {
+            testDispatcher.scheduler.runCurrent()
 
-        viewModel.updateJuristicMethod(MadhabOption.HANAFI)
-        testDispatcher.scheduler.advanceUntilIdle()
+            viewModel.updateJuristicMethod(MadhabOption.HANAFI)
+            testDispatcher.scheduler.runCurrent()
 
-        val updated = repository.userPreferencesFlow.first()
-        assertThat(updated.madhab).isEqualTo(MadhabOption.HANAFI)
+            val updated = repository.userPreferencesFlow.first()
+            assertThat(updated.madhab).isEqualTo(MadhabOption.HANAFI)
+        } finally {
+            viewModel.viewModelScope.cancel()
+        }
     }
 
     @Test
-    fun updateAutoSilence_updatesPreferencesState() = testScope.runTest {
-        testDispatcher.scheduler.advanceUntilIdle()
+    fun updateAutoSilence_updatesPreferencesState() = runTest(testDispatcher) {
+        try {
+            testDispatcher.scheduler.runCurrent()
 
-        viewModel.updateAutoSilence(AutoSilenceTimeout.SECONDS_120)
-        testDispatcher.scheduler.advanceUntilIdle()
+            viewModel.updateAutoSilence(AutoSilenceTimeout.SECONDS_120)
+            testDispatcher.scheduler.runCurrent()
 
-        val updated = repository.userPreferencesFlow.first()
-        assertThat(updated.autoSilenceTimeout).isEqualTo(AutoSilenceTimeout.SECONDS_120)
+            val updated = repository.userPreferencesFlow.first()
+            assertThat(updated.autoSilenceTimeout).isEqualTo(AutoSilenceTimeout.SECONDS_120)
+        } finally {
+            viewModel.viewModelScope.cancel()
+        }
     }
 
     @Test
