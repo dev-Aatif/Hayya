@@ -1,23 +1,26 @@
 package dev.hayya.core.system.ui
 
-import android.app.Activity
 import android.app.KeyguardManager
 import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import android.view.WindowManager
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
 import dev.hayya.core.system.audio.PrayerAudioService
+import dev.hayya.core.ui.screens.PrayerWakeScreen
+import dev.hayya.core.ui.theme.HayyaTheme
 
 /**
- * Headless / lightweight stub activity triggered by the system lockscreen FullScreenIntent.
+ * Lockscreen FullScreenIntent activity hosting [PrayerWakeScreen].
  *
  * Configured with Android window flags and lifecycle APIs to:
  * 1. Wake the display hardware (`setTurnScreenOn(true)`).
  * 2. Display over secure lockscreens without requiring device unlock (`setShowWhenLocked(true)`).
- * 3. Provide user action hooks to dismiss or silence ongoing alarms.
+ * 3. Provide tactile dismissal to stop [PrayerAudioService] and dismiss the lockscreen.
  */
-class PrayerWakeActivity : Activity() {
+class PrayerWakeActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -28,8 +31,17 @@ class PrayerWakeActivity : Activity() {
         val prayerType = intent.getStringExtra(EXTRA_PRAYER_TYPE) ?: "Prayer"
         val alertTier = intent.getStringExtra(EXTRA_ALERT_TIER) ?: "MAIN_CALL"
 
-        // Minimalist programmatic view container for headless operation
-        setContentView(android.R.layout.simple_list_item_1)
+        setContent {
+            HayyaTheme {
+                PrayerWakeScreen(
+                    prayerName = prayerType,
+                    windowExpiryText = "Calling to $prayerType prayer",
+                    autoSilenceSeconds = 60,
+                    onDismiss = { stopAlarm() },
+                    onMute = { muteAlarm() }
+                )
+            }
+        }
     }
 
     /**
@@ -44,7 +56,7 @@ class PrayerWakeActivity : Activity() {
     }
 
     /**
-     * Mutes ongoing prayer audio playback.
+     * Mutes ongoing prayer audio playback without terminating the screen.
      */
     fun muteAlarm() {
         val muteIntent = Intent(this, PrayerAudioService::class.java).apply {

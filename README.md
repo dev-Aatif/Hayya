@@ -1,8 +1,8 @@
-# Hayya Core — Headless Calculation & Unkillable Background Alarm Pipeline
+# Hayya — Ultra-Minimalist Offline Prayer App & Unkillable Background Pipeline
 
-Hayya Core is a headless Kotlin calculation engine and low-level background alarm execution pipeline for offline Android prayer reminder applications targeting **Android SDK 36** (`minSdk 26`), built using pure Kotlin and modern Jetpack libraries.
+Hayya is an ultra-minimalist offline Android prayer reminder application targeting **Android SDK 36** (`minSdk 26`), built using pure Kotlin, Jetpack Compose (Material 3), and modern Android Jetpack libraries.
 
-It has zero Compose/UI dependencies and is specifically architected for resilient, unkillable alarm execution through Android Doze mode, deep CPU sleep, and lockscreens.
+It combines an unkillable low-level background alarm execution pipeline resilient through Android Doze mode and lockscreens with a pure OLED dark theme user interface designed for zero visual distraction and instant utility.
 
 ---
 
@@ -22,19 +22,62 @@ dev.hayya.core/
 ├── data/
 │   └── preferences/
 │       └── UserPreferencesRepository.kt # Jetpack DataStore implementation
-└── system/
-    ├── alarm/
-    │   └── PrayerAlarmScheduler.kt     # AlarmManager.setAlarmClock dispatcher
-    ├── receivers/
-    │   ├── PrayerAlarmReceiver.kt      # WakeLock-protected alarm receiver (Tiers 1, 2, 3)
-    │   └── SystemClockChangedReceiver.kt # BOOT_COMPLETED & time change auto-rescheduler
-    ├── audio/
-    │   └── PrayerAudioService.kt       # ALARM audio stream foreground service with fade-out
-    ├── ui/
-    │   └── PrayerWakeActivity.kt       # Stub activity for lockscreen FullScreenIntent
-    └── device/
-        └── OemBatteryHelper.kt         # Ignore battery optimizations & OEM autostart helper
+├── system/
+│   ├── alarm/
+│   │   └── PrayerAlarmScheduler.kt     # AlarmManager.setAlarmClock dispatcher
+│   ├── receivers/
+│   │   ├── PrayerAlarmReceiver.kt      # WakeLock-protected alarm receiver (Tiers 1, 2, 3)
+│   │   └── SystemClockChangedReceiver.kt # BOOT_COMPLETED & time change auto-rescheduler
+│   ├── audio/
+│   │   └── PrayerAudioService.kt       # ALARM audio stream foreground service with fade-out
+│   ├── ui/
+│   │   └── PrayerWakeActivity.kt       # Lockscreen FullScreenIntent activity hosting PrayerWakeScreen
+│   └── device/
+│       └── OemBatteryHelper.kt         # Ignore battery optimizations & OEM autostart helper
+└── ui/
+    ├── theme/
+    │   └── Theme.kt                    # Pure OLED dark theme, color tokens & tabular figures (tnum)
+    ├── viewmodel/
+    │   └── PrayerViewModel.kt          # Unified StateFlow, 1s ticker, Hijri date, action handlers
+    └── screens/
+        ├── MainDashboardScreen.kt      # Minimal single-screen utility, live countdown, timetable
+        ├── PrayerWakeActivityUI.kt     # Lockscreen wake screen with pulsing glow & dismiss slider
+        ├── SettingsScreen.kt           # Grouped cards: auto-silence, madhab, method, battery shield
+        └── OnboardingScreen.kt         # 3-card minimalist onboarding & permissions setup
 ```
+
+---
+
+## UI & Design System
+
+### 1. Pure OLED Dark Palette
+* **Surface Background**: `#08090A`
+* **Lockscreen Wake Surface**: `#000000`
+* **Elevated Card Surface**: `#121417` with 1px border (`#1F2328`)
+* **Warm Sand Accent**: `#E5C378` strictly applied to countdown numbers, active prayer pill highlight, and interactive drag thumbs.
+* **Typography**: Geometric sans-serif with `FontFeature.tabularFigures()` (`tnum`) applied across all timers, countdowns, and clocks to eliminate horizontal digit jitter during live ticking.
+
+### 2. Reactive Presentation Layer (`PrayerViewModel`)
+* Exposes a unified `StateFlow<PrayerDashboardUiState>` consumed by Compose screens.
+* **1-Second Coroutine Ticker**: Continuously recalculates remaining time to the active/upcoming prayer window and updates elapsed progress (0.0f to 1.0f).
+* **Deterministic Offline Hijri Date**: Computes Islamic dates natively using `java.time.chrono.HijrahDate` without requiring external network APIs.
+* **Action Handlers**: Direct mutations for cycling prayer audio alert modes (`FULL_ALARM` $\to$ `GENTLE` $\to$ `MUTED`), switching Juristic Madhab (Standard vs Hanafi Asr), adjusting calculation methods, and selecting auto-silence durations.
+
+### 3. Screen Components
+* **`MainDashboardScreen`**:
+  - Single-screen utility layout with top bar city indicator and settings gear.
+  - Tracked uppercase next prayer label (e.g. `ASR`) with large tabular countdown (`01:42:18`), start time subtitle, and smooth arc progress indicator.
+  - Daily 6-row timetable (Fajr, Sunrise, Dhuhr, Asr, Maghrib, Isha) with past prayers rendered at 40% alpha, active prayer encased in an elevated card with warm sand border, and quick-tap inline audio mode cycle toggle.
+  - Bottom muted Hijri date card.
+* **`PrayerWakeScreen` (`PrayerWakeActivityUI`)**:
+  - Lockscreen full-screen intent interface rendered against OLED `#000000`.
+  - Massive prayer name (`56sp` bold) with an ambient radial pulsing glow during active audio playback.
+  - Subtext detailing window expiration (`Window ends at Sunrise 06:28 AM`) and auto-silence countdown timer.
+  - Interactive horizontal drag-to-dismiss slider built with `pointerInput`, providing haptic feedback at the 85% completion threshold before silencing audio and finishing the activity.
+* **`SettingsScreen`**:
+  - Grouped clean cards with auto-silence pills `[30s | 1m | 2m | Full]`, 3-tier notification toggles (Pre-reminder 15m, Last Call 20m), Juristic Madhab selector, and battery shield status check.
+* **`OnboardingScreen`**:
+  - 3-card first-launch wizard: Location confirmation, Asr juristic school selection, and battery optimization / exact alarm permissions grant card with a "Complete Setup" action button.
 
 ---
 
@@ -116,6 +159,9 @@ Execute the following commands locally to verify the build and test suites:
 ### Level 1 — While Developing (Micro-iterations)
 
 ```bash
+# Test UI & ViewModel state flow, countdown ticker, and audio cycling
+./gradlew :core:testDebugUnitTest --tests "dev.hayya.core.ui.viewmodel.PrayerViewModelTest"
+
 # Test AlarmManager.setAlarmClock scheduling & request codes
 ./gradlew :core:testDebugUnitTest --tests "dev.hayya.core.system.alarm.PrayerAlarmSchedulerTest"
 
