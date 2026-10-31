@@ -1,5 +1,5 @@
 plugins {
-    id("com.android.library")
+    id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
 }
@@ -9,10 +9,35 @@ android {
     compileSdk = 36
 
     defaultConfig {
+        applicationId = "dev.hayya"
         minSdk = 26
         targetSdk = 36
+        versionCode = 1
+        versionName = "1.0.0"
+
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        consumerProguardFiles("consumer-rules.pro")
+    }
+
+    signingConfigs {
+        create("release") {
+            storeFile = file("${rootDir}/hayya-release.jks")
+            storePassword = "hayyapassword"
+            keyAlias = "hayyakey"
+            keyPassword = "hayyapassword"
+            enableV1Signing = true
+            enableV2Signing = true
+        }
+    }
+
+    buildTypes {
+        release {
+            isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("release")
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+        }
+        debug {
+            signingConfig = signingConfigs.getByName("release")
+        }
     }
 
     buildFeatures {

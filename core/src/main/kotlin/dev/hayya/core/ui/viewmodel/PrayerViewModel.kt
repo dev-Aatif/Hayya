@@ -134,6 +134,23 @@ class PrayerViewModel(
     }
 
     /**
+     * Toggles or updates settings screen visibility.
+     */
+    fun setSettingsOpen(isOpen: Boolean) {
+        _uiState.update { it.copy(isSettingsOpen = isOpen) }
+    }
+
+    /**
+     * Updates Isha expiration preference (Midnight vs Fajr).
+     */
+    fun updateIshaExpiresAtMidnight(expires: Boolean) {
+        viewModelScope.launch {
+            preferencesRepository.updateIshaExpiresAtMidnight(expires)
+            alarmScheduler?.scheduleRollingAlarms(preferences = currentPreferences.copy(ishaExpiresAtMidnight = expires))
+        }
+    }
+
+    /**
      * Updates calculation method convention.
      */
     fun updateCalculationMethod(method: CalculationMethodOption) {
