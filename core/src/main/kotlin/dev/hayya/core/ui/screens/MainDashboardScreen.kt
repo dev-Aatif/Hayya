@@ -195,7 +195,7 @@ private fun DashboardTopBar(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 16.dp),
+            .padding(top = 18.dp, bottom = 4.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -206,14 +206,14 @@ private fun DashboardTopBar(
             ) {
                 Box(
                     modifier = Modifier
-                        .size(6.dp)
+                        .size(5.dp)
                         .background(MaterialTheme.colorScheme.primary, CircleShape)
                 )
                 Text(
                     text = locationName.uppercase(),
                     style = TabularClockStyle.copy(
                         fontSize = 11.sp,
-                        letterSpacing = 1.4.sp,
+                        letterSpacing = 2.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -226,8 +226,9 @@ private fun DashboardTopBar(
                     text = hijriDateString,
                     style = MaterialTheme.typography.bodySmall.copy(
                         fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        fontWeight = FontWeight.Medium
+                        letterSpacing = 0.4.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
+                        fontWeight = FontWeight.Normal
                     )
                 )
             }
@@ -242,11 +243,11 @@ private fun DashboardTopBar(
                 else -> "SEASON"
             }
             Surface(
-                shape = RoundedCornerShape(9999.dp),
-                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)),
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.10f),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)),
                 modifier = Modifier
-                    .clip(RoundedCornerShape(9999.dp))
+                    .clip(CircleShape)
                     .clickable(onClick = onOpenRamadan)
             ) {
                 Text(
@@ -254,27 +255,27 @@ private fun DashboardTopBar(
                     style = TabularClockStyle.copy(
                         fontSize = 9.sp,
                         fontWeight = FontWeight.Bold,
-                        letterSpacing = 1.sp,
+                        letterSpacing = 1.2.sp,
                         color = MaterialTheme.colorScheme.primary
                     ),
-                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp)
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
                 )
             }
         } else if (isFriday) {
             Surface(
-                shape = RoundedCornerShape(9999.dp),
-                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f))
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.10f),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.25f))
             ) {
                 Text(
                     text = "JUMU'AH • الجمعة",
                     style = TabularClockStyle.copy(
                         fontSize = 9.sp,
                         fontWeight = FontWeight.Bold,
-                        letterSpacing = 1.sp,
+                        letterSpacing = 1.2.sp,
                         color = MaterialTheme.colorScheme.primary
                     ),
-                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp)
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
                 )
             }
         }
@@ -298,55 +299,52 @@ private fun HeroCountdownSection(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier.fillMaxWidth()
     ) {
-        Surface(
-            shape = RoundedCornerShape(9999.dp),
-            color = MaterialTheme.colorScheme.surfaceContainerHigh,
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f))
-        ) {
-            Text(
-                text = "NEXT PRAYER • $nextPrayerName",
-                style = TabularClockStyle.copy(
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 1.6.sp,
-                    color = MaterialTheme.colorScheme.primary
-                ),
-                modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp)
-            )
-        }
-
-        Spacer(modifier = Modifier.height(10.dp))
-
+        // High-contrast, wide-tracked prayer name
         Text(
-            text = countdown,
-            style = TabularCountdownStyle.copy(
-                fontSize = 50.sp,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onBackground
+            text = nextPrayerName.uppercase(),
+            style = TabularClockStyle.copy(
+                fontSize = 15.sp,
+                fontWeight = FontWeight.SemiBold,
+                letterSpacing = 4.sp,
+                color = MaterialTheme.colorScheme.primary
             )
         )
 
         Spacer(modifier = Modifier.height(4.dp))
 
+        // Large, monumental tabular countdown numerals
+        Text(
+            text = countdown,
+            style = TabularCountdownStyle.copy(
+                fontSize = 54.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 1.sp,
+                color = MaterialTheme.colorScheme.onBackground
+            )
+        )
+
+        Spacer(modifier = Modifier.height(2.dp))
+
         Text(
             text = "Begins at $timeFormatted",
             style = MaterialTheme.typography.bodyMedium.copy(
                 fontSize = 13.sp,
+                letterSpacing = 0.3.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         )
 
         Spacer(modifier = Modifier.height(14.dp))
 
-        // Understated hairline progress indicator
+        // Precision optical hairline progress track
         LinearProgressIndicator(
             progress = { animatedProgress },
             modifier = Modifier
-                .width(140.dp)
-                .height(2.5.dp)
+                .width(100.dp)
+                .height(2.dp)
                 .clip(CircleShape),
             color = MaterialTheme.colorScheme.primary,
-            trackColor = MaterialTheme.colorScheme.surfaceVariant
+            trackColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f)
         )
     }
 }
@@ -558,7 +556,7 @@ fun PrayerTrackerCard(
             .fillMaxWidth()
             .border(
                 1.dp,
-                MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f),
+                MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.18f),
                 RoundedCornerShape(16.dp)
             ),
         shape = RoundedCornerShape(16.dp),
@@ -569,7 +567,7 @@ fun PrayerTrackerCard(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp)
+                .padding(horizontal = 16.dp, vertical = 14.dp)
         ) {
             // Header Row: Title & Completion Ratio
             Row(
@@ -582,7 +580,7 @@ fun PrayerTrackerCard(
                     style = TabularClockStyle.copy(
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Bold,
-                        letterSpacing = 1.2.sp,
+                        letterSpacing = 1.4.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 )
@@ -598,7 +596,7 @@ fun PrayerTrackerCard(
                 )
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(14.dp))
 
             // The Five Minimalist Circular Indicator Pips (Fajr, Dhuhr, Asr, Maghrib, Isha)
             Row(
@@ -630,16 +628,16 @@ fun PrayerTrackerCard(
                         Box(
                             contentAlignment = Alignment.Center,
                             modifier = Modifier
-                                .size(38.dp)
+                                .size(34.dp)
                                 .clip(CircleShape)
                                 .background(
                                     if (isDone) MaterialTheme.colorScheme.primary
-                                    else MaterialTheme.colorScheme.surfaceVariant
+                                    else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
                                 )
                                 .border(
                                     width = 1.dp,
                                     color = if (isDone) MaterialTheme.colorScheme.primary
-                                    else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f),
+                                    else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f),
                                     shape = CircleShape
                                 )
                         ) {
@@ -648,13 +646,13 @@ fun PrayerTrackerCard(
                                     imageVector = Icons.Outlined.Check,
                                     contentDescription = "${prayer.name} completed",
                                     tint = MaterialTheme.colorScheme.onPrimary,
-                                    modifier = Modifier.size(18.dp)
+                                    modifier = Modifier.size(17.dp)
                                 )
                             } else {
                                 Text(
                                     text = initial,
                                     style = TabularClockStyle.copy(
-                                        fontSize = 13.sp,
+                                        fontSize = 12.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
@@ -685,7 +683,7 @@ fun PrayerTrackerCard(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(1.dp)
-                        .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f))
+                        .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.15f))
                 )
                 Spacer(modifier = Modifier.height(10.dp))
 
@@ -723,8 +721,8 @@ fun PrayerTrackerCard(
 
                             Box(
                                 modifier = Modifier
-                                    .width(6.dp)
-                                    .height(14.dp)
+                                    .width(5.dp)
+                                    .height(12.dp)
                                     .clip(RoundedCornerShape(2.dp))
                                     .background(barColor)
                             )
@@ -850,109 +848,106 @@ fun FridayRemindersCard(
 
             Spacer(modifier = Modifier.height(14.dp))
 
-            // Surah Al-Kahf Authentic Hadith Box
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(MaterialTheme.colorScheme.background.copy(alpha = 0.5f))
-                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f), RoundedCornerShape(10.dp))
-                    .padding(12.dp)
+            // Surah Al-Kahf Authentic Hadith Section (Clean unnested editorial layout)
+            Column(
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Column {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "SURAH AL-KAHF",
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "SURAH AL-KAHF",
+                        style = TabularClockStyle.copy(
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Bold,
                             letterSpacing = 1.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                        Text(
-                            text = FridaySurahKahfReminder.ARABIC_TITLE,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(
-                        text = "“${FridaySurahKahfReminder.TRANSLATION}”",
-                        fontSize = 11.sp,
-                        lineHeight = 16.sp,
-                        color = MaterialTheme.colorScheme.onSurface
                     )
-                    Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = FridaySurahKahfReminder.REFERENCE,
-                        fontSize = 9.sp,
-                        fontWeight = FontWeight.Medium,
-                        letterSpacing = 0.6.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        text = FridaySurahKahfReminder.ARABIC_TITLE,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
                     )
                 }
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = "“${FridaySurahKahfReminder.TRANSLATION}”",
+                    fontSize = 11.sp,
+                    lineHeight = 16.sp,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = FridaySurahKahfReminder.REFERENCE,
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.Medium,
+                    letterSpacing = 0.6.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
-
-            // Blessings Upon Prophet Muhammad ﷺ (Salawat) Box
+            Spacer(modifier = Modifier.height(12.dp))
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(MaterialTheme.colorScheme.background.copy(alpha = 0.5f))
-                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f), RoundedCornerShape(10.dp))
-                    .padding(12.dp)
+                    .height(1.dp)
+                    .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.15f))
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Blessings Upon Prophet Muhammad ﷺ (Salawat) Section (Clean unnested editorial layout)
+            Column(
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Column {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "DUROOD & SALAWAT",
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "DUROOD & SALAWAT",
+                        style = TabularClockStyle.copy(
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Bold,
                             letterSpacing = 1.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                        Text(
-                            text = FridaySalawatReminder.ARABIC_TITLE,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(6.dp))
+                    )
                     Text(
-                        text = FridaySalawatReminder.ARABIC_DUROOD,
-                        fontSize = 17.sp,
+                        text = FridaySalawatReminder.ARABIC_TITLE,
+                        fontSize = 13.sp,
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        lineHeight = 26.sp,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "“${FridaySalawatReminder.HADITH_QUOTATION}”",
-                        fontSize = 11.sp,
-                        lineHeight = 15.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = FridaySalawatReminder.REFERENCE,
-                        fontSize = 9.sp,
-                        fontWeight = FontWeight.Medium,
-                        letterSpacing = 0.6.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.primary
                     )
                 }
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = FridaySalawatReminder.ARABIC_DUROOD,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    lineHeight = 25.sp,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "“${FridaySalawatReminder.HADITH_QUOTATION}”",
+                    fontSize = 11.sp,
+                    lineHeight = 15.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = FridaySalawatReminder.REFERENCE,
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.Medium,
+                    letterSpacing = 0.6.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
 
             Spacer(modifier = Modifier.height(12.dp))
@@ -1238,7 +1233,8 @@ fun NightFastingCard(
                                 modifier = Modifier
                                     .weight(1f)
                                     .clip(RoundedCornerShape(8.dp))
-                                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f))
+                                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.15f), RoundedCornerShape(8.dp))
                                     .padding(horizontal = 10.dp, vertical = 8.dp)
                             ) {
                                 Column {
@@ -1274,7 +1270,8 @@ fun NightFastingCard(
                                 modifier = Modifier
                                     .weight(1f)
                                     .clip(RoundedCornerShape(8.dp))
-                                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f))
+                                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.15f), RoundedCornerShape(8.dp))
                                     .padding(horizontal = 10.dp, vertical = 8.dp)
                             ) {
                                 Column {
@@ -1408,7 +1405,8 @@ fun NightFastingCard(
                                 modifier = Modifier
                                     .weight(1f)
                                     .clip(RoundedCornerShape(8.dp))
-                                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f))
+                                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.15f), RoundedCornerShape(8.dp))
                                     .padding(horizontal = 10.dp, vertical = 8.dp)
                             ) {
                                 Column {
@@ -1444,7 +1442,8 @@ fun NightFastingCard(
                                 modifier = Modifier
                                     .weight(1f)
                                     .clip(RoundedCornerShape(8.dp))
-                                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f))
+                                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.15f), RoundedCornerShape(8.dp))
                                     .padding(horizontal = 10.dp, vertical = 8.dp)
                             ) {
                                 Column {

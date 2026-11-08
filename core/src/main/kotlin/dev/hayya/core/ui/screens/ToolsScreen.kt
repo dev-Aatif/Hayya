@@ -147,28 +147,17 @@ fun ToolsScreen(
             Spacer(modifier = Modifier.height(24.dp))
 
             // Section 1 Header: Spiritual Utilities
+            // Section 1: Spiritual Utilities Group
             SectionHeader(title = "SPIRITUAL UTILITIES")
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            // Item 1: Night Windows & Tahajjud Engine
             val tahajjudBadge = if (state.isTahajjudActiveNow) {
                 "Active Now"
             } else {
                 "In ${state.tahajjudCountdown}"
             }
 
-            CompanionDirectoryItem(
-                title = "Tahajjud & Night Windows",
-                description = "Islamic midnight (Nisf al-Layl), Last Third of the Night (Thuluth al-Akhir), and Sunnah fasting guide.",
-                icon = Icons.Outlined.Bedtime,
-                badge = tahajjudBadge,
-                onClick = { showTahajjudSheet = true }
-            )
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            // Item 2: Ramadan & Eid Hub Navigation Item
             val ramadanBadge = if (state.islamicDateInfo.isRamadan) {
                 "Day ${state.islamicDateInfo.hijriDay} • Active"
             } else if (state.islamicDateInfo.isEidAlFitr || state.islamicDateInfo.isEidAlAdha) {
@@ -177,73 +166,111 @@ fun ToolsScreen(
                 "Suhoor, Iftar & Sawm"
             }
 
-            CompanionDirectoryItem(
-                title = "Ramadan & Eid Hub",
-                description = "Live Suhoor & Iftar countdown, 30-day fast tracker, authentic Duas, and Eid celebrations.",
-                icon = Icons.Outlined.Star,
-                badge = ramadanBadge,
-                onClick = onOpenRamadan
-            )
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            // Item 3: Qibla Compass Navigation Item
-            CompanionDirectoryItem(
-                title = "Qibla Compass",
-                description = "Offline spherical great-circle bearing to Kaaba with ±2° haptic alignment.",
-                icon = Icons.Outlined.Explore,
-                badge = state.qiblaReadout.ifEmpty { "118° ESE" },
-                onClick = onOpenCompass
-            )
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            // Item 4: Tactile Tasbih Navigation Item
             val targetLabel = state.tasbihMode.defaultTarget?.toString() ?: "Free"
-            CompanionDirectoryItem(
-                title = "Tactile Tasbih",
-                description = "Full-screen minimalist OLED counter with instant haptic ticks and milestone pulses.",
-                icon = Icons.Outlined.TouchApp,
-                badge = "${state.tasbihCount} / $targetLabel",
-                onClick = onOpenTasbih
-            )
 
-            Spacer(modifier = Modifier.height(10.dp))
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(
+                        1.dp,
+                        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.20f),
+                        RoundedCornerShape(16.dp)
+                    ),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainer
+                )
+            ) {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    CompanionRowItem(
+                        title = "Tahajjud & Night Windows",
+                        description = "Islamic midnight (Nisf al-Layl), Last Third of the Night, and Sunnah fasting guide.",
+                        icon = Icons.Outlined.Bedtime,
+                        badge = tahajjudBadge,
+                        onClick = { showTahajjudSheet = true }
+                    )
 
-            // Item 5: Post-Adhan Dua Navigation Item
-            CompanionDirectoryItem(
-                title = "Post-Adhan Dua",
-                description = "Authentic supplication recited after the call to prayer (Sahih al-Bukhari 614).",
-                icon = Icons.Default.MenuBook,
-                badge = if (state.userPreferences.showPostAdhanDua) "Active on Wake" else null,
-                onClick = { showPostAdhanDuaSheet = true }
-            )
+                    DirectoryDivider()
+
+                    CompanionRowItem(
+                        title = "Ramadan & Eid Hub",
+                        description = "Live Suhoor & Iftar countdown, 30-day fast tracker, authentic Duas, and Eid celebrations.",
+                        icon = Icons.Outlined.Star,
+                        badge = ramadanBadge,
+                        onClick = onOpenRamadan
+                    )
+
+                    DirectoryDivider()
+
+                    CompanionRowItem(
+                        title = "Qibla Compass",
+                        description = "Offline spherical great-circle bearing to Kaaba with ±2° haptic alignment.",
+                        icon = Icons.Outlined.Explore,
+                        badge = state.qiblaReadout.ifEmpty { "118° ESE" },
+                        onClick = onOpenCompass
+                    )
+
+                    DirectoryDivider()
+
+                    CompanionRowItem(
+                        title = "Tactile Tasbih",
+                        description = "Full-screen minimalist OLED counter with instant haptic ticks and milestone pulses.",
+                        icon = Icons.Outlined.TouchApp,
+                        badge = "${state.tasbihCount} / $targetLabel",
+                        onClick = onOpenTasbih
+                    )
+
+                    DirectoryDivider()
+
+                    CompanionRowItem(
+                        title = "Post-Adhan Dua",
+                        description = "Authentic supplication recited after the call to prayer (Sahih al-Bukhari 614).",
+                        icon = Icons.Default.MenuBook,
+                        badge = if (state.userPreferences.showPostAdhanDua) "Active on Wake" else null,
+                        onClick = { showPostAdhanDuaSheet = true }
+                    )
+                }
+            }
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Section 2 Header: Reliability & Diagnostics
+            // Section 2: Reliability & Diagnostics Group
             SectionHeader(title = "SYSTEM & RELIABILITY")
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            // Item 6: System Reliability & OEM Settings Item
-            CompanionDirectoryItem(
-                title = "System Reliability & OEM",
-                description = "Exempt Hayya from OEM task killers to guarantee exact alarm delivery.",
-                icon = Icons.Default.Shield,
-                badge = Build.MANUFACTURER.uppercase(),
-                onClick = onLaunchBatterySettings
-            )
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(
+                        1.dp,
+                        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.20f),
+                        RoundedCornerShape(16.dp)
+                    ),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainer
+                )
+            ) {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    CompanionRowItem(
+                        title = "System Reliability & OEM",
+                        description = "Exempt Hayya from OEM task killers to guarantee exact alarm delivery.",
+                        icon = Icons.Default.Shield,
+                        badge = Build.MANUFACTURER.uppercase(),
+                        onClick = onLaunchBatterySettings
+                    )
 
-            Spacer(modifier = Modifier.height(10.dp))
+                    DirectoryDivider()
 
-            // Item 7: Test Alarm Simulator Navigation Item
-            CompanionDirectoryItem(
-                title = "Alarm Simulator",
-                description = "Test the lockscreen wake screen, Adhan audio playback, gradual volume ramp, and tactile dismissal.",
-                icon = Icons.Default.Alarm,
-                onClick = { showAlarmSimulatorSheet = true }
-            )
+                    CompanionRowItem(
+                        title = "Alarm Simulator",
+                        description = "Test lockscreen wake screen, Adhan audio playback, gradual volume ramp, and dismiss slider.",
+                        icon = Icons.Default.Alarm,
+                        onClick = { showAlarmSimulatorSheet = true }
+                    )
+                }
+            }
 
             // Bottom padding to ensure floating navbar never obscures content
             Spacer(modifier = Modifier.height(112.dp))
@@ -293,10 +320,118 @@ private fun SectionHeader(title: String) {
     )
 }
 
+@Composable
+private fun DirectoryDivider() {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+            .height(1.dp)
+            .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.12f))
+    )
+}
+
 /**
- * Minimalist directory option item: Title, short description, and arrow mark.
- * Conforms strictly to 12dp crisp radius, 1px subtle borders, and pill badges.
+ * Minimalist directory row item: Title, short description, leading icon, and trailing chevron.
+ * Designed for cohesive grouping inside unified surfaces with subtle hairline dividers.
  */
+@Composable
+private fun CompanionRowItem(
+    title: String,
+    description: String,
+    icon: ImageVector,
+    badge: String? = null,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 13.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Row(
+            modifier = Modifier.weight(1f),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            // Leading Icon Container
+            Box(
+                modifier = Modifier
+                    .size(36.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primaryContainer),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+
+            Column(modifier = Modifier.weight(1f)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = title,
+                        style = TabularClockStyle.copy(
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    )
+
+                    if (badge != null) {
+                        Surface(
+                            shape = RoundedCornerShape(9999.dp),
+                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.25f))
+                        ) {
+                            Text(
+                                text = badge,
+                                style = TabularClockStyle.copy(
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 0.8.sp,
+                                    color = MaterialTheme.colorScheme.primary
+                                ),
+                                modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(2.dp))
+
+                Text(
+                    text = description,
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        fontSize = 11.sp,
+                        lineHeight = 15.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.width(10.dp))
+
+        // Forward Chevron Indicator
+        Icon(
+            imageVector = Icons.AutoMirrored.Filled.ArrowForwardIos,
+            contentDescription = "Open $title",
+            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f),
+            modifier = Modifier.size(13.dp)
+        )
+    }
+}
+
 @Composable
 private fun CompanionDirectoryItem(
     title: String,
@@ -306,107 +441,14 @@ private fun CompanionDirectoryItem(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Card(
+    CompanionRowItem(
+        title = title,
+        description = description,
+        icon = icon,
+        badge = badge,
+        onClick = onClick,
         modifier = modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .clickable(onClick = onClick)
-            .border(
-                1.dp,
-                MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f),
-                RoundedCornerShape(12.dp)
-            ),
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainer
-        )
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Row(
-                modifier = Modifier.weight(1f),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(14.dp)
-            ) {
-                // Leading Icon Container
-                Box(
-                    modifier = Modifier
-                        .size(38.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primaryContainer),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = icon,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                        modifier = Modifier.size(19.dp)
-                    )
-                }
-
-                Column(modifier = Modifier.weight(1f)) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Text(
-                            text = title,
-                            style = TabularClockStyle.copy(
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                        )
-
-                        if (badge != null) {
-                            Surface(
-                                shape = RoundedCornerShape(9999.dp),
-                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.25f))
-                            ) {
-                                Text(
-                                    text = badge,
-                                    style = TabularClockStyle.copy(
-                                        fontSize = 9.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        letterSpacing = 0.8.sp,
-                                        color = MaterialTheme.colorScheme.primary
-                                    ),
-                                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
-                                )
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(3.dp))
-
-                    Text(
-                        text = description,
-                        style = MaterialTheme.typography.bodySmall.copy(
-                            fontSize = 11.sp,
-                            lineHeight = 15.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.width(10.dp))
-
-            // Forward Chevron Indicator
-            Icon(
-                imageVector = Icons.AutoMirrored.Filled.ArrowForwardIos,
-                contentDescription = "Open $title",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f),
-                modifier = Modifier.size(14.dp)
-            )
-        }
-    }
+    )
 }
 
 /**

@@ -265,59 +265,140 @@ private fun MainSettingsMenu(
             modifier = Modifier.padding(start = 2.dp)
         )
 
-        Spacer(modifier = Modifier.height(20.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
-        // Clean Section Buttons
-        SettingsSectionNavButton(
-            title = "Appearance & Theming",
-            description = "Pure OLED Dark, Warm Light, Material You dynamic color & Sora typography",
-            icon = Icons.Outlined.Palette,
-            onClick = { onOpenSection(SettingsSubSection.APPEARANCE) }
-        )
+        // Unified Settings Navigation Directory
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.20f), RoundedCornerShape(16.dp)),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
+        ) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                SettingsSectionNavRow(
+                    title = "Appearance & Theming",
+                    description = "Pure OLED Dark, Warm Light, dynamic color & Sora typography",
+                    icon = Icons.Outlined.Palette,
+                    onClick = { onOpenSection(SettingsSubSection.APPEARANCE) }
+                )
 
-        Spacer(modifier = Modifier.height(12.dp))
+                SettingsNavDivider()
 
-        SettingsSectionNavButton(
-            title = "Calculation & Juristics",
-            description = "Conventions (13 authorities), Asr Madhab, High Latitude rules & Isha cutoff",
-            icon = Icons.Outlined.Public,
-            onClick = { onOpenSection(SettingsSubSection.CALCULATION) }
-        )
+                SettingsSectionNavRow(
+                    title = "Calculation & Juristics",
+                    description = "Conventions (13 authorities), Asr Madhab, High Latitude & Isha cutoff",
+                    icon = Icons.Outlined.Public,
+                    onClick = { onOpenSection(SettingsSubSection.CALCULATION) }
+                )
 
-        Spacer(modifier = Modifier.height(12.dp))
+                SettingsNavDivider()
 
-        SettingsSectionNavButton(
-            title = "Alerts, Sound & Minute Offsets",
-            description = "Auto-silence duration, 3-tier notification toggles & custom minute offsets",
-            icon = Icons.Outlined.NotificationsActive,
-            onClick = { onOpenSection(SettingsSubSection.ALERTS) }
-        )
+                SettingsSectionNavRow(
+                    title = "Alerts, Sound & Minute Offsets",
+                    description = "Auto-silence duration, 3-tier notification toggles & custom minute offsets",
+                    icon = Icons.Outlined.NotificationsActive,
+                    onClick = { onOpenSection(SettingsSubSection.ALERTS) }
+                )
 
-        Spacer(modifier = Modifier.height(12.dp))
+                SettingsNavDivider()
 
-        SettingsSectionNavButton(
-            title = "Device & System Reliability",
-            description = "Pinned foreground notification, battery optimization exemption & OEM guide",
-            icon = Icons.Outlined.Shield,
-            onClick = { onOpenSection(SettingsSubSection.RELIABILITY) }
-        )
+                SettingsSectionNavRow(
+                    title = "Device & System Reliability",
+                    description = "Pinned foreground notification, battery optimization exemption & OEM guide",
+                    icon = Icons.Outlined.Shield,
+                    onClick = { onOpenSection(SettingsSubSection.RELIABILITY) }
+                )
 
-        Spacer(modifier = Modifier.height(12.dp))
+                SettingsNavDivider()
 
-        SettingsSectionNavButton(
-            title = "Alarm Test & Simulation",
-            description = "Simulate real lockscreen wake alarm with countdown timer (5s, 15s, 30s, 60s)",
-            icon = Icons.Outlined.AccessAlarm,
-            onClick = { onOpenSection(SettingsSubSection.SIMULATOR) }
-        )
+                SettingsSectionNavRow(
+                    title = "Alarm Test & Simulation",
+                    description = "Simulate real lockscreen wake alarm with countdown timer (5s, 15s, 30s, 60s)",
+                    icon = Icons.Outlined.AccessAlarm,
+                    onClick = { onOpenSection(SettingsSubSection.SIMULATOR) }
+                )
+            }
+        }
 
         Spacer(modifier = Modifier.height(112.dp))
     }
 }
 
+@Composable
+private fun SettingsNavDivider() {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+            .height(1.dp)
+            .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.12f))
+    )
+}
+
 /**
- * Reusable compact navigation card for main settings categories.
+ * Reusable clean navigation row for main settings categories.
  */
+@Composable
+private fun SettingsSectionNavRow(
+    title: String,
+    description: String,
+    icon: ImageVector,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(36.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.primaryContainer),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                modifier = Modifier.size(19.dp)
+            )
+        }
+
+        Spacer(modifier = Modifier.width(14.dp))
+
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = TabularClockStyle.copy(
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = description,
+                fontSize = 11.sp,
+                lineHeight = 15.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
+        Spacer(modifier = Modifier.width(8.dp))
+
+        Icon(
+            imageVector = Icons.AutoMirrored.Filled.ArrowForwardIos,
+            contentDescription = "Open section",
+            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f),
+            modifier = Modifier.size(13.dp)
+        )
+    }
+}
+
 @Composable
 private fun SettingsSectionNavButton(
     title: String,
@@ -325,65 +406,12 @@ private fun SettingsSectionNavButton(
     icon: ImageVector,
     onClick: () -> Unit
 ) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f), RoundedCornerShape(14.dp))
-            .clickable(onClick = onClick),
-        shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(14.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(38.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primaryContainer),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                    modifier = Modifier.size(20.dp)
-                )
-            }
-
-            Spacer(modifier = Modifier.width(14.dp))
-
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = title,
-                    style = TabularClockStyle.copy(
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                )
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = description,
-                    fontSize = 11.sp,
-                    lineHeight = 15.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-
-            Spacer(modifier = Modifier.width(8.dp))
-
-            Icon(
-                imageVector = Icons.AutoMirrored.Filled.ArrowForwardIos,
-                contentDescription = "Open section",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                modifier = Modifier.size(14.dp)
-            )
-        }
-    }
+    SettingsSectionNavRow(
+        title = title,
+        description = description,
+        icon = icon,
+        onClick = onClick
+    )
 }
 
 /**
@@ -448,14 +476,14 @@ private fun SettingsGroupCard(
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f), RoundedCornerShape(14.dp)),
-        shape = RoundedCornerShape(14.dp),
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.20f), RoundedCornerShape(16.dp)),
+        shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(14.dp)
+                .padding(16.dp)
         ) {
             Text(
                 text = title,

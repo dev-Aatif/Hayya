@@ -202,7 +202,7 @@ fun RamadanScreen(
 
                 Spacer(modifier = Modifier.height(18.dp))
 
-                // Section Navigation Pills
+                // Section Navigation Pills (Clean minimal segmented controls)
                 LazyRow(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -211,24 +211,24 @@ fun RamadanScreen(
                         val isSelected = section == selectedSection
                         Box(
                             modifier = Modifier
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainer)
+                                .clip(CircleShape)
+                                .background(if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceContainer)
                                 .border(
                                     1.dp,
-                                    if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f),
-                                    RoundedCornerShape(10.dp)
+                                    if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.40f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.20f),
+                                    CircleShape
                                 )
                                 .clickable {
                                     view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
                                     selectedSection = section
                                 }
-                                .padding(horizontal = 14.dp, vertical = 8.dp)
+                                .padding(horizontal = 14.dp, vertical = 7.dp)
                         ) {
                             Text(
                                 text = section.label,
                                 fontSize = 11.sp,
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+                                color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }

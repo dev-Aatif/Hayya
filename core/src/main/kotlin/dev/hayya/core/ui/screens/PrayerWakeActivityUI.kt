@@ -145,14 +145,14 @@ fun PrayerWakeScreen(
                     modifier = Modifier
                         .size(44.dp)
                         .clip(CircleShape)
-                        .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f), CircleShape)
+                        .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.20f), CircleShape)
                         .background(MaterialTheme.colorScheme.surfaceContainer)
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Outlined.VolumeOff,
                         contentDescription = "Mute Audio",
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(20.dp)
+                        modifier = Modifier.size(19.dp)
                     )
                 }
             }

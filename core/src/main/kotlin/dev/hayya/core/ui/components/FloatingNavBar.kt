@@ -68,27 +68,27 @@ fun FloatingNavBar(
         modifier = modifier
             .fillMaxWidth()
             .navigationBarsPadding()
-            .padding(horizontal = 24.dp, vertical = 14.dp),
+            .padding(horizontal = 24.dp, vertical = 12.dp),
         contentAlignment = Alignment.Center
     ) {
         Surface(
             modifier = Modifier
-                .height(60.dp)
+                .height(54.dp)
                 .shadow(
-                    elevation = 16.dp,
+                    elevation = 6.dp,
                     shape = CircleShape,
-                    spotColor = Color(0x66000000),
-                    ambientColor = Color(0x33000000)
+                    spotColor = Color(0x40000000),
+                    ambientColor = Color(0x20000000)
                 ),
             shape = CircleShape,
-            color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.94f),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
-            tonalElevation = 6.dp
+            color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.95f),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.20f)),
+            tonalElevation = 0.dp
         ) {
             Row(
                 modifier = Modifier
-                    .padding(horizontal = 8.dp, vertical = 6.dp),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    .padding(horizontal = 6.dp, vertical = 5.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 val tabs = listOf(
@@ -102,19 +102,19 @@ fun FloatingNavBar(
                     val (unselectedIcon, selectedIcon) = icons
 
                     val pillBgColor by animateColorAsState(
-                        targetValue = if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+                        targetValue = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.14f) else Color.Transparent,
                         animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
                         label = "pill_bg_color"
                     )
 
                     val contentColor by animateColorAsState(
-                        targetValue = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                        targetValue = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                         animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
                         label = "pill_content_color"
                     )
 
                     val pillPaddingHorizontal by animateDpAsState(
-                        targetValue = if (selected) 18.dp else 14.dp,
+                        targetValue = if (selected) 16.dp else 12.dp,
                         animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
                         label = "pill_padding"
                     )
@@ -139,16 +139,16 @@ fun FloatingNavBar(
                                 imageVector = if (selected) selectedIcon else unselectedIcon,
                                 contentDescription = title,
                                 tint = contentColor,
-                                modifier = Modifier.size(20.dp)
+                                modifier = Modifier.size(19.dp)
                             )
                             if (selected) {
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
                                     text = title,
                                     style = MaterialTheme.typography.labelMedium.copy(
-                                        fontWeight = FontWeight.Bold,
+                                        fontWeight = FontWeight.SemiBold,
                                         fontSize = 12.sp,
-                                        letterSpacing = 0.5.sp,
+                                        letterSpacing = 0.4.sp,
                                         color = contentColor
                                     )
                                 )
