@@ -8,6 +8,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
@@ -24,15 +25,26 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.outlined.VolumeOff
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -51,40 +63,49 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import dev.hayya.core.ui.theme.CardBorderColor
+import dev.hayya.core.domain.model.PostAdhanDua
 import dev.hayya.core.ui.theme.HayyaTheme
 import dev.hayya.core.ui.theme.LockscreenWakeBackground
+import dev.hayya.core.ui.theme.SoraFontFamily
 import dev.hayya.core.ui.theme.TabularClockStyle
-import dev.hayya.core.ui.theme.TextMuted
-import dev.hayya.core.ui.theme.TextPrimary
-import dev.hayya.core.ui.theme.TextSecondary
-import dev.hayya.core.ui.theme.TrackBackground
-import dev.hayya.core.ui.theme.WarmSandAccent
 import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PrayerWakeScreen(
     prayerName: String,
     windowExpiryText: String,
     autoSilenceSeconds: Int,
+    showPostAdhanDua: Boolean = true,
     onDismiss: () -> Unit,
     onMute: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     var remainingSilenceSeconds by remember { mutableIntStateOf(autoSilenceSeconds) }
+    var showDuaSheet by remember { mutableStateOf(false) }
 
     LaunchedEffect(autoSilenceSeconds) {
         remainingSilenceSeconds = autoSilenceSeconds
-        while (remainingSilenceSeconds > 0) {
-            delay(1000L)
-            remainingSilenceSeconds--
+        if (autoSilenceSeconds > 0) {
+            while (remainingSilenceSeconds > 0) {
+                delay(1000L)
+                remainingSilenceSeconds--
+            }
+            // Pause auto-dismissal if user is actively reading the post-Adhan Dua
+            while (showDuaSheet) {
+                delay(1000L)
+            }
+            // Safety fallback: auto-dismiss screen if still open after fade-out completes
+            delay(2500L)
+            onDismiss()
         }
     }
 
@@ -124,13 +145,13 @@ fun PrayerWakeScreen(
                     modifier = Modifier
                         .size(44.dp)
                         .clip(CircleShape)
-                        .border(1.dp, CardBorderColor, CircleShape)
-                        .background(TrackBackground)
+                        .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f), CircleShape)
+                        .background(MaterialTheme.colorScheme.surfaceContainer)
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Outlined.VolumeOff,
                         contentDescription = "Mute Audio",
-                        tint = TextSecondary,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(20.dp)
                     )
                 }
@@ -148,7 +169,7 @@ fun PrayerWakeScreen(
                         .background(
                             Brush.radialGradient(
                                 colors = listOf(
-                                    WarmSandAccent.copy(alpha = pulseGlowAlpha * 0.45f),
+                                    MaterialTheme.colorScheme.primary.copy(alpha = pulseGlowAlpha * 0.45f),
                                     Color.Transparent
                                 )
                             ),
@@ -161,11 +182,11 @@ fun PrayerWakeScreen(
                 ) {
                     Text(
                         text = prayerName.uppercase(),
-                        fontFamily = FontFamily.SansSerif,
+                        fontFamily = SoraFontFamily,
                         fontWeight = FontWeight.Bold,
                         fontSize = 58.sp,
                         letterSpacing = 6.sp,
-                        color = TextPrimary
+                        color = MaterialTheme.colorScheme.onSurface
                     )
 
                     Spacer(modifier = Modifier.height(14.dp))
@@ -174,7 +195,7 @@ fun PrayerWakeScreen(
                         text = windowExpiryText,
                         style = TabularClockStyle.copy(
                             fontSize = 15.sp,
-                            color = TextSecondary
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         ),
                         textAlign = TextAlign.Center
                     )
@@ -185,22 +206,194 @@ fun PrayerWakeScreen(
                             text = "Auto-silencing in ${remainingSilenceSeconds}s",
                             style = TabularClockStyle.copy(
                                 fontSize = 13.sp,
-                                color = TextMuted
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                             )
                         )
                     }
                 }
             }
 
-            // Bottom Section: Slide to Dismiss
+            // Bottom Section: Post-Adhan Dua button + Slide to Dismiss
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(bottom = 36.dp)
             ) {
+                if (showPostAdhanDua) {
+                    OutlinedButton(
+                        onClick = { showDuaSheet = true },
+                        shape = RoundedCornerShape(20.dp),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)),
+                        colors = ButtonDefaults.outlinedButtonColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+                        modifier = Modifier
+                            .height(40.dp)
+                            .padding(bottom = 12.dp)
+                    ) {
+                        Text(
+                            text = "POST-ADHAN DUA",
+                            style = TabularClockStyle.copy(
+                                fontSize = 11.sp,
+                                letterSpacing = 1.5.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        )
+                    }
+                }
+
                 DismissSlider(
                     onDismiss = onDismiss
+                )
+            }
+        }
+    }
+
+    if (showDuaSheet) {
+        PostAdhanDuaBottomSheet(
+            onDismiss = { showDuaSheet = false }
+        )
+    }
+}
+
+/**
+ * Full-screen modal bottom sheet presenting the authentic Sahih al-Bukhari 614 Post-Adhan Dua.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun PostAdhanDuaBottomSheet(
+    onDismiss: () -> Unit
+) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+        dragHandle = {
+            Box(
+                modifier = Modifier
+                    .padding(vertical = 10.dp)
+                    .size(width = 36.dp, height = 4.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+            )
+        }
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp)
+                .padding(bottom = 36.dp)
+                .verticalScroll(rememberScrollState()),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            // Header: Title & Reference Badge
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = PostAdhanDua.TITLE,
+                    style = TabularClockStyle.copy(
+                        fontSize = 13.sp,
+                        letterSpacing = 2.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                )
+
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(MaterialTheme.colorScheme.primaryContainer)
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                ) {
+                    Text(
+                        text = PostAdhanDua.REFERENCE,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // Arabic Supplication Card
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f), RoundedCornerShape(16.dp)),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
+            ) {
+                Column(
+                    modifier = Modifier.padding(20.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = PostAdhanDua.ARABIC_TEXT,
+                        fontSize = 20.sp,
+                        lineHeight = 36.sp,
+                        fontWeight = FontWeight.Medium,
+                        textAlign = TextAlign.Center,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(18.dp))
+
+            // Transliteration
+            Text(
+                text = PostAdhanDua.TRANSLITERATION,
+                fontSize = 13.sp,
+                lineHeight = 20.sp,
+                fontStyle = FontStyle.Italic,
+                textAlign = TextAlign.Center,
+                color = MaterialTheme.colorScheme.primary
+            )
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // English Translation
+            Text(
+                text = "“${PostAdhanDua.TRANSLATION}”",
+                fontSize = 13.sp,
+                lineHeight = 20.sp,
+                textAlign = TextAlign.Center,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Authentic Virtue Note
+            Text(
+                text = PostAdhanDua.VIRTUE,
+                fontSize = 11.sp,
+                lineHeight = 16.sp,
+                textAlign = TextAlign.Center,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+            )
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Close Button
+            Button(
+                onClick = onDismiss,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary
+                ),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(44.dp),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text(
+                    text = "Close",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp
                 )
             }
         }
@@ -230,8 +423,8 @@ private fun DismissSlider(
             .fillMaxWidth()
             .height(64.dp)
             .clip(RoundedCornerShape(32.dp))
-            .background(TrackBackground)
-            .border(1.dp, CardBorderColor, RoundedCornerShape(32.dp)),
+            .background(MaterialTheme.colorScheme.surfaceContainer)
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f), RoundedCornerShape(32.dp)),
         contentAlignment = Alignment.CenterStart
     ) {
         val maxDragPx = with(density) { (maxWidth - thumbSize - 8.dp).toPx() }
@@ -253,7 +446,7 @@ private fun DismissSlider(
                 style = TabularClockStyle.copy(
                     fontSize = 12.sp,
                     letterSpacing = 2.sp,
-                    color = TextMuted
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                 )
             )
         }
@@ -264,8 +457,8 @@ private fun DismissSlider(
                 .offset { IntOffset((if (isDragging) dragOffsetPx else animatedOffsetPx).roundToInt() + 8, 0) }
                 .size(thumbSize)
                 .clip(CircleShape)
-                .background(Color(0xFF1C1F24))
-                .border(1.dp, WarmSandAccent.copy(alpha = 0.5f), CircleShape)
+                .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f), CircleShape)
                 .pointerInput(Unit) {
                     detectHorizontalDragGestures(
                         onDragStart = {
@@ -300,7 +493,7 @@ private fun DismissSlider(
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.ArrowForward,
                 contentDescription = "Slide thumb",
-                tint = WarmSandAccent,
+                tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(24.dp)
             )
         }

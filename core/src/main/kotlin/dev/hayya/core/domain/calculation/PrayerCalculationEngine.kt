@@ -32,7 +32,8 @@ data class DailyPrayerTimes(
     val maghrib: Long,
     val isha: Long,
     val nextDayFajr: Long,
-    val islamicMidnight: Long
+    val islamicMidnight: Long,
+    val lastThirdOfTheNight: Long = 0L
 ) {
     fun timeFor(prayerType: PrayerType): Long = when (prayerType) {
         PrayerType.FAJR -> fajr
@@ -41,6 +42,18 @@ data class DailyPrayerTimes(
         PrayerType.ASR -> asr
         PrayerType.MAGHRIB -> maghrib
         PrayerType.ISHA -> isha
+    }
+
+    /**
+     * Returns the next upcoming occurrence of [prayerType] relative to [nowMillis].
+     *
+     * During the evening Isha window (after Isha, before local midnight) the next prayer is
+     * FAJR, but [fajr] refers to this date's (already elapsed) Fajr. In that case tomorrow's
+     * Fajr ([nextDayFajr]) is returned so countdowns never target a past timestamp.
+     */
+    fun upcomingTimeFor(prayerType: PrayerType, nowMillis: Long): Long {
+        val time = timeFor(prayerType)
+        return if (prayerType == PrayerType.FAJR && time <= nowMillis) nextDayFajr else time
     }
 
     fun windowEndFor(prayerType: PrayerType, ishaExpiresAtMidnight: Boolean = false): Long = when (prayerType) {
@@ -105,8 +118,10 @@ class PrayerCalculationEngine(
         val nextDayFajr = applyOffset(tomorrowRaw.fajrEpochMillis, PrayerType.FAJR)
 
         // Islamic Midnight (Nisf al-Layl) = Maghrib + (NextDayFajr - Maghrib) / 2
+        // Last Third of the Night (Thuluth al-Akhir) = Maghrib + 2 * (NextDayFajr - Maghrib) / 3
         val nightDuration = (nextDayFajr - maghrib).coerceAtLeast(0L)
         val islamicMidnight = maghrib + (nightDuration / 2L)
+        val lastThirdOfTheNight = maghrib + ((2L * nightDuration) / 3L)
 
         return DailyPrayerTimes(
             date = date,
@@ -118,7 +133,8 @@ class PrayerCalculationEngine(
             maghrib = maghrib,
             isha = isha,
             nextDayFajr = nextDayFajr,
-            islamicMidnight = islamicMidnight
+            islamicMidnight = islamicMidnight,
+            lastThirdOfTheNight = lastThirdOfTheNight
         )
     }
 

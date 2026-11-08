@@ -1,8 +1,20 @@
 package dev.hayya.core.widget
 
+import android.content.Context
+import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.SizeMode
+import androidx.glance.appwidget.updateAll
 import com.google.common.truth.Truth.assertThat
 import dev.hayya.core.domain.model.PrayerType
+import io.mockk.Runs
+import io.mockk.coEvery
+import io.mockk.coVerify
+import io.mockk.just
+import io.mockk.mockk
+import io.mockk.mockkStatic
+import io.mockk.unmockkStatic
+import io.mockk.verify
+import kotlinx.coroutines.test.runTest
 import org.junit.Test
 
 class PrayerWidgetUpdaterTest {
@@ -33,6 +45,20 @@ class PrayerWidgetUpdaterTest {
         assertThat(snapshot.countdownFormatted).isEqualTo("in 42m")
         assertThat(snapshot.dailyTimes).hasSize(5)
         assertThat(snapshot.locationName).contains("Makkah")
+        assertThat(snapshot.isFriday).isFalse()
+    }
+
+    @Test
+    fun widgetPrayerSnapshot_supportsFridayJumuah() {
+        val snapshot = WidgetPrayerSnapshot(
+            nextPrayerName = "JUMU'AH",
+            nextPrayerTimeFormatted = "12:15 PM",
+            countdownFormatted = "in 25m",
+            isFriday = true
+        )
+
+        assertThat(snapshot.isFriday).isTrue()
+        assertThat(snapshot.nextPrayerName).isEqualTo("JUMU'AH")
     }
 
     @Test
@@ -48,11 +74,57 @@ class PrayerWidgetUpdaterTest {
     }
 
     @Test
+    fun dailyPrayersWidget_usesExactSizeMode() {
+        val widget = DailyPrayersWidget()
+        assertThat(widget.sizeMode).isEqualTo(SizeMode.Exact)
+    }
+
+    @Test
     fun widgetReceivers_instantiateGlanceAppWidgetsProperly() {
         val compactReceiver = CompactPrayerWidgetReceiver()
         val timetableReceiver = FullTimetableWidgetReceiver()
+        val dailyReceiver = DailyPrayersWidgetReceiver()
 
         assertThat(compactReceiver.glanceAppWidget).isInstanceOf(CompactPrayerWidget::class.java)
         assertThat(timetableReceiver.glanceAppWidget).isInstanceOf(FullTimetableWidget::class.java)
+        assertThat(dailyReceiver.glanceAppWidget).isInstanceOf(DailyPrayersWidget::class.java)
+    }
+
+    @Test
+    fun togglePrayerActionCallback_hasCorrectParameterKey() {
+        assertThat(TogglePrayerActionCallback.PrayerTypeKey.name).isEqualTo("prayer_type")
+    }
+
+    @Test
+    fun widgetPrayerSnapshot_calculatesCompletedCountProperly() {
+        val emptySnapshot = WidgetPrayerSnapshot()
+        assertThat(emptySnapshot.completedCount).isEqualTo(0)
+
+        val completedSnapshot = WidgetPrayerSnapshot(
+            completedPrayers = setOf(PrayerType.FAJR, PrayerType.DHUHR, PrayerType.ASR)
+        )
+        assertThat(completedSnapshot.completedCount).isEqualTo(3)
+    }
+
+    /**
+     * Regression: updateAllWidgets used to broadcast ACTION_PRAYER_DATA_CHANGED, which three
+     * receivers handle by calling updateAllWidgets again -> infinite, exponentially growing
+     * broadcast loop (100% CPU, wake locks, severe battery drain in background).
+     */
+    @Test
+    fun updateAllWidgets_refreshesGlanceWidgets_withoutReBroadcastingDataChanged() = runTest {
+        val context = mockk<Context>(relaxed = true)
+        mockkStatic("androidx.glance.appwidget.GlanceAppWidgetKt")
+        try {
+            coEvery { any<GlanceAppWidget>().updateAll(any()) } just Runs
+
+            PrayerWidgetUpdater.updateAllWidgets(context)
+
+            coVerify(exactly = 3) { any<GlanceAppWidget>().updateAll(context) }
+            verify(exactly = 0) { context.sendBroadcast(any()) }
+            verify(exactly = 0) { context.sendBroadcast(any(), any()) }
+        } finally {
+            unmockkStatic("androidx.glance.appwidget.GlanceAppWidgetKt")
+        }
     }
 }

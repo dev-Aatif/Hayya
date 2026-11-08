@@ -7,15 +7,22 @@ import androidx.datastore.preferences.core.doublePreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import dev.hayya.core.domain.model.AlertMode
+import dev.hayya.core.domain.model.AutoMuteDuration
+import dev.hayya.core.domain.model.AutoMuteTargetMode
 import dev.hayya.core.domain.model.AutoSilenceTimeout
 import dev.hayya.core.domain.model.CalculationMethodOption
+import dev.hayya.core.domain.model.FridayAutoMuteDuration
 import dev.hayya.core.domain.model.GeoLocation
 import dev.hayya.core.domain.model.HighLatitudeRuleOption
 import dev.hayya.core.domain.model.MadhabOption
 import dev.hayya.core.domain.model.PrayerType
+import dev.hayya.core.domain.model.SavedRingerState
+import dev.hayya.core.domain.model.ThemeModeOption
 import dev.hayya.core.domain.model.UserPreferences
+import dev.hayya.core.domain.model.VolumeEscalationOption
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
@@ -36,8 +43,25 @@ object PreferenceKeys {
     val ISHA_EXPIRES_AT_MIDNIGHT = booleanPreferencesKey("pref_isha_expires_at_midnight")
 
     val AUTO_SILENCE_TIMEOUT = stringPreferencesKey("pref_auto_silence_timeout")
+    val AUTO_MUTE_DURATION = stringPreferencesKey("pref_auto_mute_duration")
+    val AUTO_MUTE_TARGET_MODE = stringPreferencesKey("pref_auto_mute_target_mode")
+    val FRIDAY_AUTO_MUTE_DURATION = stringPreferencesKey("pref_friday_auto_mute_duration")
+    val SURAH_KAHF_READ_DATE = stringPreferencesKey("pref_surah_kahf_read_date")
+    val SAVED_RINGER_MODE = intPreferencesKey("pref_saved_ringer_mode")
+    val SAVED_RING_VOLUME = intPreferencesKey("pref_saved_ring_volume")
+    val SAVED_NOTIFICATION_VOLUME = intPreferencesKey("pref_saved_notification_volume")
+    val IS_AUTO_MUTED = booleanPreferencesKey("pref_is_auto_muted")
+    val AUTO_MUTE_END_EPOCH_MILLIS = longPreferencesKey("pref_auto_mute_end_epoch_millis")
+
     val PRE_REMINDER_ENABLED = booleanPreferencesKey("pref_pre_reminder_enabled")
     val LAST_CALL_ENABLED = booleanPreferencesKey("pref_last_call_enabled")
+    val PINNED_NOTIFICATION_ENABLED = booleanPreferencesKey("pref_pinned_notification_enabled")
+    val SHOW_POST_ADHAN_DUA = booleanPreferencesKey("pref_show_post_adhan_dua")
+    val THEME_MODE = stringPreferencesKey("pref_theme_mode")
+    val DYNAMIC_COLOR_ENABLED = booleanPreferencesKey("pref_dynamic_color_enabled")
+    val VOLUME_ESCALATION = stringPreferencesKey("pref_volume_escalation")
+    val TAHAJJUD_ALARM_ENABLED = booleanPreferencesKey("pref_tahajjud_alarm_enabled")
+    val TAHAJJUD_ALARM_MINUTES_OFFSET = intPreferencesKey("pref_tahajjud_alarm_minutes_offset")
 
     fun offsetKeyFor(prayer: PrayerType): Preferences.Key<Int> =
         intPreferencesKey("pref_offset_${prayer.name.lowercase()}")
@@ -147,6 +171,42 @@ class UserPreferencesRepository(
     }
 
     /**
+     * Updates Pinned Foreground Status Notification preference.
+     */
+    suspend fun updatePinnedNotificationEnabled(enabled: Boolean) {
+        dataStore.edit { prefs ->
+            prefs[PreferenceKeys.PINNED_NOTIFICATION_ENABLED] = enabled
+        }
+    }
+
+    /**
+     * Updates Post-Adhan Dua on wake screen visibility preference.
+     */
+    suspend fun updateShowPostAdhanDua(enabled: Boolean) {
+        dataStore.edit { prefs ->
+            prefs[PreferenceKeys.SHOW_POST_ADHAN_DUA] = enabled
+        }
+    }
+
+    /**
+     * Updates visual theme mode (Pure OLED Dark, Warm Light, Follow System).
+     */
+    suspend fun updateThemeMode(mode: ThemeModeOption) {
+        dataStore.edit { prefs ->
+            prefs[PreferenceKeys.THEME_MODE] = mode.name
+        }
+    }
+
+    /**
+     * Updates Material You dynamic color adaptation toggle.
+     */
+    suspend fun updateDynamicColorEnabled(enabled: Boolean) {
+        dataStore.edit { prefs ->
+            prefs[PreferenceKeys.DYNAMIC_COLOR_ENABLED] = enabled
+        }
+    }
+
+    /**
      * Updates manual minute offset for a specific prayer (-30 to +30 minutes).
      */
     suspend fun updatePrayerOffset(prayer: PrayerType, offsetMinutes: Int) {
@@ -204,6 +264,118 @@ class UserPreferencesRepository(
     }
 
     /**
+     * Updates Congregational Prayer (Mosque) auto-mute duration.
+     */
+    suspend fun updateAutoMuteDuration(duration: AutoMuteDuration) {
+        dataStore.edit { prefs ->
+            prefs[PreferenceKeys.AUTO_MUTE_DURATION] = duration.name
+        }
+    }
+
+    /**
+     * Updates Congregational Prayer (Mosque) auto-mute target mode.
+     */
+    suspend fun updateAutoMuteTargetMode(mode: AutoMuteTargetMode) {
+        dataStore.edit { prefs ->
+            prefs[PreferenceKeys.AUTO_MUTE_TARGET_MODE] = mode.name
+        }
+    }
+
+    /**
+     * Updates Friday (Jumu'ah) Khutbah extended auto-mute duration.
+     */
+    suspend fun updateFridayAutoMuteDuration(duration: FridayAutoMuteDuration) {
+        dataStore.edit { prefs ->
+            prefs[PreferenceKeys.FRIDAY_AUTO_MUTE_DURATION] = duration.name
+        }
+    }
+
+    /**
+     * Sets or clears Surah Al-Kahf completion state for the given date (ISO format YYYY-MM-DD).
+     */
+    suspend fun setSurahKahfReadForDate(dateIso: String, isRead: Boolean) {
+        dataStore.edit { prefs ->
+            if (isRead) {
+                prefs[PreferenceKeys.SURAH_KAHF_READ_DATE] = dateIso
+            } else {
+                prefs.remove(PreferenceKeys.SURAH_KAHF_READ_DATE)
+            }
+        }
+    }
+
+    /**
+     * Saves system ringer state and volume levels prior to muting.
+     */
+    suspend fun saveRingerState(
+        ringerMode: Int,
+        ringVolume: Int,
+        notificationVolume: Int,
+        endEpochMillis: Long
+    ) {
+        dataStore.edit { prefs ->
+            prefs[PreferenceKeys.SAVED_RINGER_MODE] = ringerMode
+            prefs[PreferenceKeys.SAVED_RING_VOLUME] = ringVolume
+            prefs[PreferenceKeys.SAVED_NOTIFICATION_VOLUME] = notificationVolume
+            prefs[PreferenceKeys.IS_AUTO_MUTED] = true
+            prefs[PreferenceKeys.AUTO_MUTE_END_EPOCH_MILLIS] = endEpochMillis
+        }
+    }
+
+    /**
+     * Clears active auto-mute state upon restoration.
+     */
+    suspend fun clearAutoMuteState() {
+        dataStore.edit { prefs ->
+            prefs[PreferenceKeys.IS_AUTO_MUTED] = false
+            prefs[PreferenceKeys.AUTO_MUTE_END_EPOCH_MILLIS] = 0L
+        }
+    }
+
+    /**
+     * Reactive stream observing captured ringer state for auto-mute restoration.
+     */
+    val savedRingerStateFlow: Flow<SavedRingerState> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) emit(emptyPreferences()) else throw exception
+        }
+        .map { preferences ->
+            SavedRingerState(
+                ringerMode = preferences[PreferenceKeys.SAVED_RINGER_MODE] ?: 2, // AudioManager.RINGER_MODE_NORMAL
+                ringVolume = preferences[PreferenceKeys.SAVED_RING_VOLUME] ?: 7,
+                notificationVolume = preferences[PreferenceKeys.SAVED_NOTIFICATION_VOLUME] ?: 7,
+                isAutoMuted = preferences[PreferenceKeys.IS_AUTO_MUTED] ?: false,
+                endEpochMillis = preferences[PreferenceKeys.AUTO_MUTE_END_EPOCH_MILLIS] ?: 0L
+            )
+        }
+
+    /**
+     * Updates gradual volume escalation option for full prayer alarms.
+     */
+    suspend fun updateVolumeEscalation(option: VolumeEscalationOption) {
+        dataStore.edit { preferences ->
+            preferences[PreferenceKeys.VOLUME_ESCALATION] = option.name
+        }
+    }
+
+    /**
+     * Updates gentle Tahajjud / Qiyam al-Layl pre-alarm toggle.
+     */
+    suspend fun updateTahajjudAlarmEnabled(enabled: Boolean) {
+        dataStore.edit { preferences ->
+            preferences[PreferenceKeys.TAHAJJUD_ALARM_ENABLED] = enabled
+        }
+    }
+
+    /**
+     * Updates Tahajjud pre-alarm minute offset.
+     */
+    suspend fun updateTahajjudAlarmMinutesOffset(offsetMinutes: Int) {
+        dataStore.edit { preferences ->
+            preferences[PreferenceKeys.TAHAJJUD_ALARM_MINUTES_OFFSET] = offsetMinutes
+        }
+    }
+
+    /**
      * Resets all preferences to initial defaults.
      */
     suspend fun resetToDefaults() {
@@ -252,8 +424,37 @@ class UserPreferencesRepository(
             runCatching { AutoSilenceTimeout.valueOf(name) }.getOrNull()
         } ?: AutoSilenceTimeout.SECONDS_60
 
+        val autoMuteDuration = preferences[PreferenceKeys.AUTO_MUTE_DURATION]?.let { name ->
+            runCatching { AutoMuteDuration.valueOf(name) }.getOrNull()
+        } ?: AutoMuteDuration.OFF
+
+        val autoMuteTargetMode = preferences[PreferenceKeys.AUTO_MUTE_TARGET_MODE]?.let { name ->
+            runCatching { AutoMuteTargetMode.valueOf(name) }.getOrNull()
+        } ?: AutoMuteTargetMode.SILENT
+
+        val fridayAutoMuteDuration = preferences[PreferenceKeys.FRIDAY_AUTO_MUTE_DURATION]?.let { name ->
+            runCatching { FridayAutoMuteDuration.valueOf(name) }.getOrNull()
+        } ?: FridayAutoMuteDuration.MATCH_STANDARD
+
+        val surahKahfReadDate = preferences[PreferenceKeys.SURAH_KAHF_READ_DATE]
+
         val preReminderEnabled = preferences[PreferenceKeys.PRE_REMINDER_ENABLED] ?: true
         val lastCallEnabled = preferences[PreferenceKeys.LAST_CALL_ENABLED] ?: true
+        val pinnedNotificationEnabled = preferences[PreferenceKeys.PINNED_NOTIFICATION_ENABLED] ?: false
+        val showPostAdhanDua = preferences[PreferenceKeys.SHOW_POST_ADHAN_DUA] ?: true
+
+        val themeMode = preferences[PreferenceKeys.THEME_MODE]?.let { name ->
+            runCatching { ThemeModeOption.valueOf(name) }.getOrNull()
+        } ?: ThemeModeOption.DARK
+
+        val dynamicColorEnabled = preferences[PreferenceKeys.DYNAMIC_COLOR_ENABLED] ?: false
+
+        val volumeEscalation = preferences[PreferenceKeys.VOLUME_ESCALATION]?.let { name ->
+            runCatching { VolumeEscalationOption.valueOf(name) }.getOrNull()
+        } ?: VolumeEscalationOption.SECONDS_20
+
+        val tahajjudAlarmEnabled = preferences[PreferenceKeys.TAHAJJUD_ALARM_ENABLED] ?: false
+        val tahajjudAlarmMinutesOffset = preferences[PreferenceKeys.TAHAJJUD_ALARM_MINUTES_OFFSET] ?: 0
 
         return UserPreferences(
             location = GeoLocation(lat, lng, alt, locationName),
@@ -264,8 +465,19 @@ class UserPreferencesRepository(
             manualMinuteOffsets = offsets,
             alertModes = alertModes,
             autoSilenceTimeout = autoSilenceTimeout,
+            autoMuteDuration = autoMuteDuration,
+            autoMuteTargetMode = autoMuteTargetMode,
+            fridayAutoMuteDuration = fridayAutoMuteDuration,
+            surahKahfReadDate = surahKahfReadDate,
             preReminderEnabled = preReminderEnabled,
-            lastCallEnabled = lastCallEnabled
+            lastCallEnabled = lastCallEnabled,
+            pinnedNotificationEnabled = pinnedNotificationEnabled,
+            showPostAdhanDua = showPostAdhanDua,
+            themeMode = themeMode,
+            dynamicColorEnabled = dynamicColorEnabled,
+            volumeEscalation = volumeEscalation,
+            tahajjudAlarmEnabled = tahajjudAlarmEnabled,
+            tahajjudAlarmMinutesOffset = tahajjudAlarmMinutesOffset
         )
     }
 }

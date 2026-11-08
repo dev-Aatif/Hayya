@@ -33,6 +33,14 @@ enum class PrayerType {
             MAGHRIB -> ISHA
             ISHA -> FAJR
         }
+
+    /**
+     * Resolves the canonical display name for the prayer, honoring Friday (Jumu'ah)
+     * convention where Friday prayer replaces standard Dhuhr.
+     */
+    fun displayName(isFriday: Boolean = false): String {
+        return if (this == DHUHR && isFriday) "JUMU'AH" else this.name
+    }
 }
 
 /**

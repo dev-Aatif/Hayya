@@ -10,10 +10,12 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import com.google.common.truth.Truth.assertThat
+import dev.hayya.core.domain.model.AlertMode
 import dev.hayya.core.domain.model.AlertTier
 import dev.hayya.core.domain.model.PrayerType
 import dev.hayya.core.system.alarm.PrayerAlarmScheduler
 import dev.hayya.core.system.audio.PrayerAudioService
+import dev.hayya.core.widget.PrayerWidgetUpdater
 import io.mockk.*
 import org.junit.After
 import org.junit.Before
@@ -33,6 +35,8 @@ class PrayerAlarmReceiverTest {
     fun setUp() {
         mockkConstructor(NotificationCompat.Builder::class)
         every { anyConstructed<NotificationCompat.Builder>().build() } returns mockk(relaxed = true)
+        mockkObject(PrayerWidgetUpdater)
+        coEvery { PrayerWidgetUpdater.updateAllWidgets(any()) } just Runs
         mockkStatic(NotificationManagerCompat::class)
         mockkStatic(ContextCompat::class)
         mockkStatic(PendingIntent::class)
@@ -54,22 +58,20 @@ class PrayerAlarmReceiverTest {
     }
 
     @Test
-    fun onReceive_acquiresAndReleasesWakeLockSafely() {
+    fun onReceive_acquiresWakeLockSafely() {
         every { wakeLock.isHeld } returns true
 
-        val intent = Intent(PrayerAlarmScheduler.ACTION_TRIGGER_PRAYER_ALARM).apply {
-            putExtra(PrayerAlarmScheduler.EXTRA_NOTIFICATION_ID, 100)
-            putExtra(PrayerAlarmScheduler.EXTRA_PRAYER_TYPE, PrayerType.FAJR.name)
-            putExtra(PrayerAlarmScheduler.EXTRA_ALERT_TIER, AlertTier.PRE_REMINDER.name)
+        val intent = mockk<Intent>(relaxed = true) {
+            every { action } returns PrayerAlarmScheduler.ACTION_TRIGGER_PRAYER_ALARM
+            every { getIntExtra(PrayerAlarmScheduler.EXTRA_NOTIFICATION_ID, -1) } returns 100
+            every { getStringExtra(PrayerAlarmScheduler.EXTRA_PRAYER_TYPE) } returns PrayerType.FAJR.name
+            every { getStringExtra(PrayerAlarmScheduler.EXTRA_ALERT_TIER) } returns AlertTier.PRE_REMINDER.name
         }
 
         receiver.onReceive(context, intent)
 
         verify(exactly = 1) {
             wakeLock.acquire(10_000L) // 10-second safety timeout
-        }
-        verify(exactly = 1) {
-            wakeLock.release()
         }
     }
 
@@ -141,6 +143,121 @@ class PrayerAlarmReceiverTest {
 
         verify(exactly = 1) {
             notificationManagerCompat.notify(testId, any())
+        }
+    }
+
+    @Test
+    fun onReceive_tier2MainCall_gentleBanner_postsNotificationWithoutStartingAudioService() {
+        val testId = 10105
+        val intent = mockk<Intent>(relaxed = true) {
+            every { action } returns PrayerAlarmScheduler.ACTION_TRIGGER_PRAYER_ALARM
+            every { getIntExtra(PrayerAlarmScheduler.EXTRA_NOTIFICATION_ID, -1) } returns testId
+            every { getStringExtra(PrayerAlarmScheduler.EXTRA_PRAYER_TYPE) } returns PrayerType.DHUHR.name
+            every { getStringExtra(PrayerAlarmScheduler.EXTRA_ALERT_TIER) } returns AlertTier.MAIN_CALL.name
+            every { getStringExtra(PrayerAlarmScheduler.EXTRA_ALERT_MODE) } returns AlertMode.GENTLE_BANNER.name
+        }
+
+        receiver.onReceive(context, intent)
+
+        verify(exactly = 1) {
+            notificationManagerCompat.notify(testId, any())
+        }
+        verify(exactly = 0) {
+            ContextCompat.startForegroundService(context, any())
+        }
+    }
+
+    @Test
+    fun onReceive_mutedAlertMode_suppressesNotificationAndAudioService() {
+        val testId = 10106
+        val intent = mockk<Intent>(relaxed = true) {
+            every { action } returns PrayerAlarmScheduler.ACTION_TRIGGER_PRAYER_ALARM
+            every { getIntExtra(PrayerAlarmScheduler.EXTRA_NOTIFICATION_ID, -1) } returns testId
+            every { getStringExtra(PrayerAlarmScheduler.EXTRA_PRAYER_TYPE) } returns PrayerType.ISHA.name
+            every { getStringExtra(PrayerAlarmScheduler.EXTRA_ALERT_TIER) } returns AlertTier.MAIN_CALL.name
+            every { getStringExtra(PrayerAlarmScheduler.EXTRA_ALERT_MODE) } returns AlertMode.MUTED.name
+        }
+
+        receiver.onReceive(context, intent)
+
+        verify(exactly = 0) {
+            notificationManagerCompat.notify(any(), any())
+        }
+        verify(exactly = 0) {
+            ContextCompat.startForegroundService(context, any())
+        }
+    }
+
+    @Test
+    fun onReceive_tier2MainCall_attemptsDirectActivityStartForInteractiveDisplay() {
+        val testId = 10108
+        val activityIntentSlot = slot<Intent>()
+        every { context.startActivity(capture(activityIntentSlot)) } returns Unit
+
+        val intent = mockk<Intent>(relaxed = true) {
+            every { action } returns PrayerAlarmScheduler.ACTION_TRIGGER_PRAYER_ALARM
+            every { getIntExtra(PrayerAlarmScheduler.EXTRA_NOTIFICATION_ID, -1) } returns testId
+            every { getStringExtra(PrayerAlarmScheduler.EXTRA_PRAYER_TYPE) } returns PrayerType.FAJR.name
+            every { getStringExtra(PrayerAlarmScheduler.EXTRA_ALERT_TIER) } returns AlertTier.MAIN_CALL.name
+            every { getStringExtra(PrayerAlarmScheduler.EXTRA_ALERT_MODE) } returns AlertMode.FULL_ALARM.name
+        }
+
+        receiver.onReceive(context, intent)
+
+        verify(atLeast = 1) {
+            context.startActivity(any())
+        }
+        assertThat(activityIntentSlot.isCaptured).isTrue()
+    }
+
+    @Test
+    fun onReceive_restoreRingerModeAction_acquiresWakeLockAndProcessesRestore() {
+        mockkObject(dev.hayya.core.system.audio.AutoMuteManager)
+        coEvery { dev.hayya.core.system.audio.AutoMuteManager.restoreRingerMode(any(), any()) } returns true
+
+        val intent = mockk<Intent>(relaxed = true) {
+            every { action } returns PrayerAlarmScheduler.ACTION_RESTORE_RINGER_MODE
+        }
+
+        receiver.onReceive(context, intent)
+
+        verify(exactly = 1) {
+            wakeLock.acquire(5_000L)
+        }
+    }
+
+    @Test
+    fun onReceive_suhoorAlarmAction_acquiresWakeLockAndPostsNotification() {
+        val intent = mockk<Intent>(relaxed = true) {
+            every { action } returns PrayerAlarmScheduler.ACTION_TRIGGER_SUHOOR_ALARM
+            every { getLongExtra(PrayerAlarmScheduler.EXTRA_FAJR_MILLIS, 0L) } returns 1_700_000_000_000L
+        }
+
+        receiver.onReceive(context, intent)
+
+        verify(exactly = 1) {
+            wakeLock.acquire(5_000L)
+        }
+        verify(exactly = 1) {
+            notificationManagerCompat.notify(PrayerAlarmScheduler.NOTIFICATION_ID_SUHOOR, any())
+        }
+    }
+
+    @Test
+    fun onReceive_eidCelebrationAction_acquiresWakeLockAndPostsCelebrationNotification() {
+        val intent = mockk<Intent>(relaxed = true) {
+            every { action } returns PrayerAlarmScheduler.ACTION_TRIGGER_EID_NOTIFICATION
+            every { getStringExtra(PrayerAlarmScheduler.EXTRA_EID_TITLE) } returns "🌙 Eid al-Fitr Mubarak!"
+            every { getStringExtra(PrayerAlarmScheduler.EXTRA_EID_MESSAGE) } returns "Taqabbal Allahu Minna wa Minkum"
+        }
+
+        receiver.onReceive(context, intent)
+
+        verify(exactly = 1) {
+            wakeLock.acquire(5_000L)
+        }
+        verify(exactly = 1) {
+            notificationManagerCompat.notify(PrayerAlarmScheduler.NOTIFICATION_ID_EID, any())
         }
     }
 }

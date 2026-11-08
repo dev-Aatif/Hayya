@@ -14,14 +14,20 @@ dev.hayya.core/
 │   ├── model/
 │   │   ├── PrayerModels.kt             # PrayerType, AlertTier, ScheduledAlert, PrayerWindow
 │   │   └── PreferenceModels.kt         # CalculationMethodOption, MadhabOption, UserPreferences
+│   ├── ramadan/
+│   │   └── RamadanModels.kt            # FastStatus, DailyFastRecord, RamadanDuasStore, EidGuide
 │   └── calculation/
 │       ├── AstronomicalCalculator.kt   # Pluggable astronomical provider interface
 │       ├── AdhanAstronomicalCalculator.kt # Wrapper over Batoul Apps adhan (Java/Android)
 │       ├── SolarAstronomicalCalculator.kt # Pure Kotlin offline astronomical solver (Jean Meeus)
 │       └── PrayerCalculationEngine.kt  # Window resolver, 3-tier triggers, 7-day rolling queue
 ├── data/
-│   └── preferences/
-│       └── UserPreferencesRepository.kt # Jetpack DataStore implementation
+│   ├── preferences/
+│   │   └── UserPreferencesRepository.kt # Jetpack DataStore implementation
+│   ├── prayerlog/
+│   │   └── PrayerLogRepository.kt      # Daily prayer log and 7-day completion archive
+│   └── ramadan/
+│       └── FastTrackerRepository.kt    # Ramadan fasting log, Qadha counter & alert settings
 ├── system/
 │   ├── alarm/
 │   │   └── PrayerAlarmScheduler.kt     # AlarmManager.setAlarmClock dispatcher
@@ -29,6 +35,7 @@ dev.hayya.core/
 │   │   ├── PrayerAlarmReceiver.kt      # WakeLock-protected alarm receiver (Tiers 1, 2, 3)
 │   │   └── SystemClockChangedReceiver.kt # BOOT_COMPLETED & time change auto-rescheduler
 │   ├── audio/
+│   │   ├── AutoMuteManager.kt          # Congregational Salah auto-mute & exact volume restorer
 │   │   └── PrayerAudioService.kt       # ALARM audio stream foreground service with fade-out
 │   ├── ui/
 │   │   └── PrayerWakeActivity.kt       # Lockscreen FullScreenIntent activity hosting PrayerWakeScreen
@@ -41,6 +48,7 @@ dev.hayya.core/
     │   └── PrayerViewModel.kt          # Unified StateFlow, 1s ticker, Hijri date, action handlers
     └── screens/
         ├── MainDashboardScreen.kt      # Minimal single-screen utility, live countdown, timetable
+        ├── RamadanScreen.kt            # Dedicated Ramadan & Eid Hub: Suhoor/Iftar, Sawm tracker, Duas
         ├── PrayerWakeActivityUI.kt     # Lockscreen wake screen with pulsing glow & dismiss slider
         ├── SettingsScreen.kt           # Grouped cards: auto-silence, madhab, method, battery shield
         └── OnboardingScreen.kt         # 3-card minimalist onboarding & permissions setup
@@ -59,7 +67,7 @@ dev.hayya.core/
 
 ### 2. Reactive Presentation Layer (`PrayerViewModel`)
 * Exposes a unified `StateFlow<PrayerDashboardUiState>` consumed by Compose screens.
-* **1-Second Coroutine Ticker**: Continuously recalculates remaining time to the active/upcoming prayer window and updates elapsed progress (0.0f to 1.0f).
+* **1-Second Coroutine Ticker**: Continuously recalculates remaining time to the active/upcoming prayer window and updates elapsed progress (0.0f to 1.0f). The ticker runs only while the UI is collecting state (paused when the app is in the background).
 * **Deterministic Offline Hijri Date**: Computes Islamic dates natively using `java.time.chrono.HijrahDate` without requiring external network APIs.
 * **Action Handlers**: Direct mutations for cycling prayer audio alert modes (`FULL_ALARM` $\to$ `GENTLE` $\to$ `MUTED`), switching Juristic Madhab (Standard vs Hanafi Asr), adjusting calculation methods, and selecting auto-silence durations.
 
@@ -132,6 +140,25 @@ dev.hayya.core/
   - **Vivo / iQOO**: FuntouchOS / OriginOS Background StartUp Manager.
   - **Transsion (Tecno, Infinix, itel)**: HiOS / XOS AutoStart app list.
 
+### 7. Congregational Prayer Auto-Mute (Mosque Mode, `AutoMuteManager`)
+* Phones accidentally ringing during congregational prayer in the mosque is solved with automated ringer muting:
+  1. Configurable duration in Settings: Off, 15m, 20m, 25m, or 30m after Adhan ($T_0$).
+  2. Configurable target mode: `Silent` (via Do Not Disturb / Notification Policy API) or `Vibrate`.
+  3. Captures exact prior ringer mode and system volume streams (`STREAM_RING`, `STREAM_NOTIFICATION`) in Jetpack DataStore before muting.
+  4. Automatically schedules exact un-mute via `AlarmManager.setAlarmClock` with `ACTION_RESTORE_RINGER_MODE`.
+  5. Displays an ongoing status notification during the silence window with a 1-tap **"Restore Normal Mode Now"** action.
+  6. Restores the exact prior volume levels and ringer mode upon completion, with state persisted across app kills and reboots via `SystemClockChangedReceiver`.
+  7. Includes graceful DND permission handling: falls back to `Vibrate` if DND access is not yet granted, with a direct 1-tap settings shortcut in the UI.
+
+### 8. Ramadan & Eid Hub (`RamadanScreen`, `FastTrackerRepository`, `IslamicCalendarHelper`)
+* Full spiritual support for the blessed month of Ramadan and the two major Eids:
+  1. **Live Suhoor & Iftar Tracker**: Real-time dual display showing Fajr Suhoor cutoff time and Maghrib Iftar time, alongside live second-by-second countdowns.
+  2. **Daily Fasting Tracker (Sawm Log)**: 30-Day Ramadan visual progress grid with instant status cycling (Fasted, Missed, Exempt, Pending), Qadha make-up counter, and progress ratio.
+  3. **Authentic Duas Collection**: Verified Sunnah supplications for Iftar (Abu Dawud 2357 & 2358), Suhoor Niyyah, Laylat al-Qadr (Tirmidhi 3513), the Three Ashras, and fasting etiquette.
+  4. **Offline 30-Day Ramadan Timetable**: Astronomical calculations for all 30 days of Ramadan based on the user's exact coordinates and Juristic convention.
+  5. **Celebratory Eid al-Fitr & Eid al-Adha Hub**: Authentic Sunnah practices (Ghusl, dates before prayer, Zakat al-Fitr, alternate routes, Takbirat al-Tashreeq, Udhiyah) and interactive Takbirat counter.
+  6. **Personalized Notifications**: Pre-Suhoor wake-up alarm (30m, 40m, 50m, 60m before Fajr), personalized Maghrib Iftar alerts with the authentic Iftar Dua, and morning celebratory announcements on Eid al-Fitr and Eid al-Adha.
+
 ---
 
 ## Permissions Declared in `AndroidManifest.xml`
@@ -144,6 +171,7 @@ dev.hayya.core/
 <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
 <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 <uses-permission android:name="android.permission.VIBRATE" />
+<uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
 <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
 <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
 <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
@@ -173,6 +201,13 @@ Execute the following commands locally to verify the build and test suites:
 
 # Test PrayerAudioService AudioAttributes and fade-out volume loop
 ./gradlew :core:testDebugUnitTest --tests "dev.hayya.core.system.audio.PrayerAudioServiceTest"
+
+# Test AutoMuteManager congregational mosque mode & exact volume restoration
+./gradlew :core:testDebugUnitTest --tests "dev.hayya.core.system.audio.AutoMuteManagerTest"
+
+# Test Ramadan & Fasting tracker models, Duas, and Eid guide
+./gradlew :core:testDebugUnitTest --tests "dev.hayya.core.domain.ramadan.RamadanModelsTest"
+./gradlew :core:testDebugUnitTest --tests "dev.hayya.core.data.ramadan.FastTrackerRepositoryTest"
 
 # Test OEM battery optimization & autostart dispatchers
 ./gradlew :core:testDebugUnitTest --tests "dev.hayya.core.system.device.OemBatteryHelperTest"

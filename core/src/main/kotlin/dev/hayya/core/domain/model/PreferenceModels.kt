@@ -200,6 +200,22 @@ enum class AlertMode(val displayName: String) {
 }
 
 /**
+ * Configurable gradual volume escalation duration before reaching full audio volume.
+ * Smoothly scales alarm volume from 10% to 100% every 1.5 seconds.
+ */
+enum class VolumeEscalationOption(
+    val seconds: Int,
+    val displayName: String,
+    val subtitle: String
+) {
+    OFF(0, "Off (Instant 100%)", "Immediately plays at 100% full volume"),
+    SECONDS_10(10, "10 Seconds", "Starts at 10% and steps up every 1.5s to 100% over 10s"),
+    SECONDS_15(15, "15 Seconds", "Starts at 10% and steps up every 1.5s to 100% over 15s"),
+    SECONDS_20(20, "20 Seconds (Recommended)", "Starts at 10% and smoothly steps up to 100% over 20s"),
+    SECONDS_30(30, "30 Seconds (Gentle)", "Starts at 10% and gently steps up to 100% over 30s")
+}
+
+/**
  * Auto-silence duration timeout for loud alerts.
  */
 enum class AutoSilenceTimeout(val seconds: Int?, val displayName: String) {
@@ -210,6 +226,75 @@ enum class AutoSilenceTimeout(val seconds: Int?, val displayName: String) {
 
     val durationMillis: Long?
         get() = seconds?.let { it * 1000L }
+}
+
+/**
+ * Configurable auto-mute duration after Adhan during congregational prayer (Salah) in the mosque.
+ */
+enum class AutoMuteDuration(val minutes: Int, val displayName: String) {
+    OFF(0, "Off"),
+    MINUTES_15(15, "15 Minutes"),
+    MINUTES_20(20, "20 Minutes"),
+    MINUTES_25(25, "25 Minutes"),
+    MINUTES_30(30, "30 Minutes");
+
+    val durationMillis: Long
+        get() = minutes * 60_000L
+}
+
+/**
+ * Target system ringer mode when auto-mute is active during congregational prayer.
+ */
+enum class AutoMuteTargetMode(val displayName: String) {
+    SILENT("Silent"),
+    VIBRATE("Vibrate")
+}
+
+/**
+ * Configurable extended auto-mute duration specifically for Friday (Jumu'ah)
+ * to cover both the Khutbah (sermon) and congregational Salah.
+ */
+enum class FridayAutoMuteDuration(val minutes: Int?, val displayName: String) {
+    MATCH_STANDARD(null, "Match Standard"),
+    MINUTES_45(45, "45 Minutes"),
+    MINUTES_60(60, "60 Minutes"),
+    OFF(0, "Off");
+
+    val durationMillis: Long?
+        get() = minutes?.let { it * 60_000L }
+
+    /**
+     * Resolves the effective minutes to mute, falling back to [standard] if matching standard.
+     */
+    fun resolveMinutes(standard: AutoMuteDuration): Int {
+        return when (this) {
+            MATCH_STANDARD -> standard.minutes
+            MINUTES_45 -> 45
+            MINUTES_60 -> 60
+            OFF -> 0
+        }
+    }
+}
+
+/**
+ * Saved ringer mode and stream volume state captured prior to auto-mute,
+ * ensuring exact restoration upon prayer window completion.
+ */
+data class SavedRingerState(
+    val ringerMode: Int = 2, // AudioManager.RINGER_MODE_NORMAL
+    val ringVolume: Int = 7,
+    val notificationVolume: Int = 7,
+    val isAutoMuted: Boolean = false,
+    val endEpochMillis: Long = 0L
+)
+
+/**
+ * App visual theme appearance options.
+ */
+enum class ThemeModeOption(val displayName: String, val subtitle: String) {
+    DARK("Pure OLED Dark", "True black OLED background for maximum contrast and battery conservation"),
+    LIGHT("Warm Sand Light", "Minimalist ivory aesthetic with warm amber and sand tones"),
+    SYSTEM("Follow System", "Automatically matches Android system day/night appearance")
 }
 
 /**
@@ -226,10 +311,23 @@ data class UserPreferences(
         if (prayer == PrayerType.SUNRISE) AlertMode.GENTLE_BANNER else AlertMode.FULL_ALARM
     },
     val autoSilenceTimeout: AutoSilenceTimeout = AutoSilenceTimeout.SECONDS_60,
+    val autoMuteDuration: AutoMuteDuration = AutoMuteDuration.OFF,
+    val autoMuteTargetMode: AutoMuteTargetMode = AutoMuteTargetMode.SILENT,
+    val fridayAutoMuteDuration: FridayAutoMuteDuration = FridayAutoMuteDuration.MATCH_STANDARD,
+    val surahKahfReadDate: String? = null,
     val preReminderEnabled: Boolean = true,
-    val lastCallEnabled: Boolean = true
+    val lastCallEnabled: Boolean = true,
+    val pinnedNotificationEnabled: Boolean = false,
+    val showPostAdhanDua: Boolean = true,
+    val themeMode: ThemeModeOption = ThemeModeOption.DARK,
+    val dynamicColorEnabled: Boolean = false,
+    val volumeEscalation: VolumeEscalationOption = VolumeEscalationOption.SECONDS_20,
+    val tahajjudAlarmEnabled: Boolean = false,
+    val tahajjudAlarmMinutesOffset: Int = 0
 ) {
     fun getOffset(prayer: PrayerType): Int = manualMinuteOffsets[prayer] ?: 0
 
     fun getAlertMode(prayer: PrayerType): AlertMode = alertModes[prayer] ?: AlertMode.FULL_ALARM
+
+    fun isSurahKahfReadForDate(dateIso: String): Boolean = surahKahfReadDate == dateIso
 }

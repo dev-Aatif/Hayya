@@ -15,10 +15,7 @@
     <!-- Notifications & Feedback -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.VIBRATE" />
-
-    <!-- Location for Automatic Prayer Coordinate Calculation -->
-    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
-    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
 
     <!-- Foreground Audio Service (Android 14+ / SDK 34+) -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
@@ -27,6 +24,10 @@
 
     <!-- Battery Optimization Exemption -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+
+    <!-- Optional Hardware Sensor Features for Offline Qibla Compass -->
+    <uses-feature android:name="android.hardware.sensor.compass" android:required="false" />
+    <uses-feature android:name="android.hardware.sensor.accelerometer" android:required="false" />
 
     <application
         android:name=".HayyaApplication"
@@ -55,6 +56,9 @@
             android:exported="false">
             <intent-filter>
                 <action android:name="dev.hayya.alarm.ACTION_TRIGGER_PRAYER_ALARM" />
+                <action android:name="dev.hayya.alarm.ACTION_RESTORE_RINGER_MODE" />
+                <action android:name="dev.hayya.alarm.ACTION_TRIGGER_SUHOOR_ALARM" />
+                <action android:name="dev.hayya.alarm.ACTION_TRIGGER_EID_NOTIFICATION" />
             </intent-filter>
         </receiver>
 
@@ -77,6 +81,16 @@
             android:exported="false"
             android:foregroundServiceType="mediaPlayback" />
 
+        <!-- Persistent Pinned Prayer Status Foreground Service (LMK immunity) -->
+        <service
+            android:name=".system.notifications.PinnedPrayerStatusService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Displays ongoing prayer window countdown in notification shade" />
+        </service>
+
         <!-- Headless / Stub Activity for Lockscreen Fullscreen Intent -->
         <activity
             android:name=".system.ui.PrayerWakeActivity"
@@ -86,7 +100,7 @@
             android:excludeFromRecents="true"
             android:showForAllUsers="true"
             android:launchMode="singleTask"
-            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+            android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen" />
 
         <!-- Glance AppWidget: Compact 2x2 Prayer Widget -->
         <receiver
@@ -114,6 +128,20 @@
             <meta-data
                 android:name="android.appwidget.provider"
                 android:resource="@xml/full_timetable_widget_info" />
+        </receiver>
+
+        <!-- Glance AppWidget: Daily Prayers Widget -->
+        <receiver
+            android:name=".widget.DailyPrayersWidgetReceiver"
+            android:label="@string/widget_daily_prayers_name"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="dev.hayya.widget.ACTION_PRAYER_DATA_CHANGED" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/daily_prayers_widget_info" />
         </receiver>
 
         <!-- General Widget Data Sync Receiver -->

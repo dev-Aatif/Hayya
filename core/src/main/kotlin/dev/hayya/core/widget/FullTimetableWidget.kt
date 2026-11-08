@@ -139,8 +139,9 @@ class FullTimetableWidget : GlanceAppWidget() {
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             snapshot.dailyTimes.forEach { (prayer, timeString) ->
+                                val prayerDisplayName = prayer.displayName(snapshot.isFriday)
                                 val isPast = snapshot.pastPrayers.contains(prayer)
-                                val isUpcoming = snapshot.nextPrayerName.equals(prayer.name, ignoreCase = true)
+                                val isUpcoming = snapshot.nextPrayerName.equals(prayerDisplayName, ignoreCase = true)
 
                                 val textColor = when {
                                     isUpcoming -> Color(0xFFE5C378)
@@ -164,7 +165,7 @@ class FullTimetableWidget : GlanceAppWidget() {
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Text(
-                                            text = prayer.name,
+                                            text = prayerDisplayName,
                                             style = TextStyle(
                                                 color = ColorProvider(textColor),
                                                 fontSize = 11.sp,

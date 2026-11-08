@@ -32,6 +32,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -42,16 +43,8 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.hayya.core.domain.model.MadhabOption
-import dev.hayya.core.ui.theme.CardBorderColor
-import dev.hayya.core.ui.theme.ElevatedCardSurface
 import dev.hayya.core.ui.theme.HayyaTheme
-import dev.hayya.core.ui.theme.OledBackground
 import dev.hayya.core.ui.theme.TabularClockStyle
-import dev.hayya.core.ui.theme.TextMuted
-import dev.hayya.core.ui.theme.TextPrimary
-import dev.hayya.core.ui.theme.TextSecondary
-import dev.hayya.core.ui.theme.WarmSandAccent
-import dev.hayya.core.ui.theme.WarmSandAccentSubtle
 
 @Composable
 fun OnboardingScreen(
@@ -68,7 +61,7 @@ fun OnboardingScreen(
 ) {
     Surface(
         modifier = modifier.fillMaxSize(),
-        color = OledBackground
+        color = MaterialTheme.colorScheme.background
     ) {
         Column(
             modifier = Modifier
@@ -91,7 +84,7 @@ fun OnboardingScreen(
                         fontSize = 24.sp,
                         letterSpacing = 6.sp,
                         fontWeight = FontWeight.Bold,
-                        color = WarmSandAccent
+                        color = MaterialTheme.colorScheme.primary
                     )
                 )
 
@@ -100,7 +93,7 @@ fun OnboardingScreen(
                 Text(
                     text = "Offline prayer time precision & reliable alarms",
                     fontSize = 13.sp,
-                    color = TextSecondary
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
 
                 Spacer(modifier = Modifier.height(36.dp))
@@ -143,8 +136,8 @@ fun OnboardingScreen(
                         .height(54.dp),
                     shape = RoundedCornerShape(27.dp),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = WarmSandAccent,
-                        contentColor = Color(0xFF141619)
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary
                     )
                 ) {
                     Text(
@@ -153,7 +146,7 @@ fun OnboardingScreen(
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Bold,
                             letterSpacing = 2.sp,
-                            color = Color(0xFF141619)
+                            color = MaterialTheme.colorScheme.onPrimary
                         )
                     )
                 }
@@ -170,10 +163,10 @@ private fun OnboardingLocationCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .border(1.dp, CardBorderColor, RoundedCornerShape(14.dp))
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f), RoundedCornerShape(14.dp))
             .clickable(onClick = onClick),
         shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = ElevatedCardSurface)
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
     ) {
         Row(
             modifier = Modifier
@@ -185,13 +178,13 @@ private fun OnboardingLocationCard(
                 modifier = Modifier
                     .size(40.dp)
                     .clip(CircleShape)
-                    .background(WarmSandAccentSubtle),
+                    .background(MaterialTheme.colorScheme.primaryContainer),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = Icons.Outlined.LocationOn,
                     contentDescription = null,
-                    tint = WarmSandAccent,
+                    tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(20.dp)
                 )
             }
@@ -202,19 +195,19 @@ private fun OnboardingLocationCard(
                 Text(
                     text = "Location",
                     fontSize = 11.sp,
-                    color = TextSecondary,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     letterSpacing = 1.sp
                 )
                 Text(
                     text = locationName.ifEmpty { "Tap to confirm location" },
-                    style = TabularClockStyle.copy(fontSize = 14.sp, color = TextPrimary)
+                    style = TabularClockStyle.copy(fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface)
                 )
             }
 
             Icon(
                 imageVector = Icons.Outlined.Check,
                 contentDescription = "Confirmed",
-                tint = WarmSandAccent,
+                tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(18.dp)
             )
         }
@@ -229,15 +222,15 @@ private fun OnboardingMadhabCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .border(1.dp, CardBorderColor, RoundedCornerShape(14.dp)),
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f), RoundedCornerShape(14.dp)),
         shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = ElevatedCardSurface)
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
     ) {
         Column(modifier = Modifier.padding(18.dp)) {
             Text(
                 text = "ASR JURISTIC SCHOOL",
                 fontSize = 11.sp,
-                color = TextSecondary,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 letterSpacing = 1.sp
             )
 
@@ -271,12 +264,12 @@ private fun MadhabChoicePill(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val background = if (isSelected) WarmSandAccent else Color.Transparent
-    val textColor = if (isSelected) Color(0xFF141619) else TextSecondary
+    val background = if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent
+    val textColor = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
     val borderModifier = if (isSelected) {
-        Modifier.border(1.dp, WarmSandAccent, RoundedCornerShape(8.dp))
+        Modifier.border(1.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(8.dp))
     } else {
-        Modifier.border(1.dp, CardBorderColor, RoundedCornerShape(8.dp))
+        Modifier.border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f), RoundedCornerShape(8.dp))
     }
 
     Box(
@@ -309,15 +302,15 @@ private fun OnboardingPermissionsCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .border(1.dp, CardBorderColor, RoundedCornerShape(14.dp)),
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f), RoundedCornerShape(14.dp)),
         shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = ElevatedCardSurface)
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
     ) {
         Column(modifier = Modifier.padding(18.dp)) {
             Text(
                 text = "ALARM RELIABILITY",
                 fontSize = 11.sp,
-                color = TextSecondary,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 letterSpacing = 1.sp
             )
 
@@ -368,7 +361,7 @@ private fun PermissionRowItem(
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = if (isGranted) WarmSandAccent else TextMuted,
+                tint = if (isGranted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
                 modifier = Modifier.size(20.dp)
             )
 
@@ -377,12 +370,12 @@ private fun PermissionRowItem(
             Column {
                 Text(
                     text = title,
-                    style = TabularClockStyle.copy(fontSize = 13.sp, color = TextPrimary)
+                    style = TabularClockStyle.copy(fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface)
                 )
                 Text(
                     text = subtitle,
                     fontSize = 11.sp,
-                    color = TextSecondary
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
@@ -391,14 +384,14 @@ private fun PermissionRowItem(
             modifier = Modifier
                 .size(24.dp)
                 .clip(CircleShape)
-                .background(if (isGranted) WarmSandAccent else Color(0xFF1E2126)),
+                .background(if (isGranted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant),
             contentAlignment = Alignment.Center
         ) {
             if (isGranted) {
                 Icon(
                     imageVector = Icons.Outlined.Check,
                     contentDescription = "Granted",
-                    tint = Color(0xFF141619),
+                    tint = MaterialTheme.colorScheme.onPrimary,
                     modifier = Modifier.size(14.dp)
                 )
             }

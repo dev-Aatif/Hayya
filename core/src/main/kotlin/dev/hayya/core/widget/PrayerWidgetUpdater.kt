@@ -1,10 +1,10 @@
 package dev.hayya.core.widget
 
 import android.content.Context
-import android.content.Intent
 import android.util.Log
 import androidx.glance.appwidget.updateAll
 import com.batoulapps.adhan.Coordinates
+import dev.hayya.core.data.prayerlog.PrayerLogRepository
 import dev.hayya.core.data.preferences.UserPreferencesRepository
 import dev.hayya.core.domain.calculation.DailyPrayerTimes
 import dev.hayya.core.domain.calculation.PrayerCalculationEngine
@@ -17,6 +17,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import kotlinx.datetime.Clock
+import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.Instant
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
@@ -32,8 +33,12 @@ data class WidgetPrayerSnapshot(
     val locationName: String = "Makkah",
     val dailyTimes: List<Pair<PrayerType, String>> = emptyList(),
     val pastPrayers: Set<PrayerType> = emptySet(),
-    val activePrayers: Set<PrayerType> = emptySet()
-)
+    val activePrayers: Set<PrayerType> = emptySet(),
+    val completedPrayers: Set<PrayerType> = emptySet(),
+    val isFriday: Boolean = false
+) {
+    val completedCount: Int get() = completedPrayers.size
+}
 
 /**
  * Helper class updating all active Glance AppWidget instances with the latest prayer calculations.
@@ -45,6 +50,11 @@ object PrayerWidgetUpdater {
 
     /**
      * Reads current calculation and preferences asynchronously and updates all AppWidgets.
+     *
+     * IMPORTANT: This function must NOT broadcast [ACTION_PRAYER_DATA_CHANGED]. Three receivers
+     * (CompactPrayerWidgetReceiver, FullTimetableWidgetReceiver, PrayerWidgetReceiver) handle
+     * that action by calling this function, so re-broadcasting here creates an unbounded,
+     * exponentially fanning-out broadcast loop that pins the CPU and drains the battery.
      */
     suspend fun updateAllWidgets(context: Context) {
         withContext(Dispatchers.Default) {
@@ -52,12 +62,7 @@ object PrayerWidgetUpdater {
                 // Update Glance widgets
                 CompactPrayerWidget().updateAll(context)
                 FullTimetableWidget().updateAll(context)
-
-                // Dispatch broadcast to any registered custom receivers
-                val broadcastIntent = Intent(ACTION_PRAYER_DATA_CHANGED).apply {
-                    setPackage(context.packageName)
-                }
-                context.sendBroadcast(broadcastIntent)
+                DailyPrayersWidget().updateAll(context)
                 Log.d(TAG, "Successfully refreshed all prayer AppWidgets")
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to update prayer widgets", e)
@@ -104,7 +109,7 @@ object PrayerWidgetUpdater {
                 )
 
                 val nextPrayer = window.nextPrayer
-                val nextPrayerMillis = dailyTimes.timeFor(nextPrayer)
+                val nextPrayerMillis = dailyTimes.upcomingTimeFor(nextPrayer, nowMillis)
                 val remainingMillis = (nextPrayerMillis - nowMillis).coerceAtLeast(0L)
 
                 val remainingMinutes = remainingMillis / 60_000L
@@ -133,18 +138,24 @@ object PrayerWidgetUpdater {
                     is PrayerWindow.SunriseInterval -> setOf(PrayerType.SUNRISE, PrayerType.DHUHR)
                 }
 
+                val prayerLogRepo = PrayerLogRepository(dataStore)
+                val dailyLog = prayerLogRepo.observeDailyLog(localDate).first()
+                val isFriday = localDate.dayOfWeek == DayOfWeek.FRIDAY
+
                 WidgetPrayerSnapshot(
-                    nextPrayerName = nextPrayer.name,
+                    nextPrayerName = nextPrayer.displayName(isFriday),
                     nextPrayerTimeFormatted = PrayerViewModel.formatTimeOfDay(nextPrayerMillis, timeZone),
                     countdownFormatted = countdownFormatted,
                     activePrayerName = when (window) {
-                        is PrayerWindow.Active -> window.currentPrayer.name
+                        is PrayerWindow.Active -> window.currentPrayer.displayName(isFriday)
                         is PrayerWindow.SunriseInterval -> "SUNRISE"
                     },
                     locationName = userPrefs.location.resolvedLocationName.ifEmpty { "Makkah" },
                     dailyTimes = timetable,
                     pastPrayers = pastPrayers,
-                    activePrayers = activePrayers
+                    activePrayers = activePrayers,
+                    completedPrayers = dailyLog.completedPrayers,
+                    isFriday = isFriday
                 )
             } catch (e: Exception) {
                 Log.e(TAG, "Error generating widget snapshot", e)

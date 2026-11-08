@@ -7,5 +7,6 @@
     android:updatePeriodMillis="1800000"
     android:description="@string/widget_compact_description"
     android:initialLayout="@layout/widget_loading_layout"
+    android:previewLayout="@layout/compact_prayer_widget_preview"
     android:resizeMode="horizontal|vertical"
     android:widgetCategory="home_screen" />

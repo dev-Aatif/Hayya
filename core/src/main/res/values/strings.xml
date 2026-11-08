@@ -5,4 +5,6 @@
     <string name="widget_compact_description">Compact 2x2 upcoming prayer countdown</string>
     <string name="widget_timetable_name">Hayya Full Timetable</string>
     <string name="widget_timetable_description">Wide 4x2 prayer timetable with live countdown</string>
+    <string name="widget_daily_prayers_name">Hayya Daily Prayers</string>
+    <string name="widget_daily_prayers_description">Daily prayer tracker pips and times</string>
 </resources>

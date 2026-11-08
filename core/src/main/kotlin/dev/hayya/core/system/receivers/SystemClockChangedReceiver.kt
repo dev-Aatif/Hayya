@@ -11,9 +11,11 @@ import androidx.datastore.preferences.core.Preferences
 import dev.hayya.core.data.preferences.UserPreferencesRepository
 import dev.hayya.core.domain.calculation.PrayerCalculationEngine
 import dev.hayya.core.system.alarm.PrayerAlarmScheduler
+import dev.hayya.core.system.notifications.PinnedPrayerStatusService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.io.File
 
@@ -72,6 +74,22 @@ open class SystemClockChangedReceiver : BroadcastReceiver() {
                 scheduler.cancelAllScheduledAlarms()
                 scheduler.scheduleRollingAlarms()
                 dev.hayya.core.widget.PrayerWidgetUpdater.updateAllWidgets(context)
+                val userPrefs = repository.userPreferencesFlow.first()
+                if (userPrefs.pinnedNotificationEnabled) {
+                    PinnedPrayerStatusService.start(context)
+                }
+
+                // Verify and reschedule or restore auto-mute state if interrupted across reboots
+                val savedRingerState = repository.savedRingerStateFlow.first()
+                if (savedRingerState.isAutoMuted) {
+                    val now = System.currentTimeMillis()
+                    if (now >= savedRingerState.endEpochMillis) {
+                        dev.hayya.core.system.audio.AutoMuteManager.restoreRingerMode(context, repository)
+                    } else {
+                        scheduler.scheduleAutoUnmute(savedRingerState.endEpochMillis)
+                    }
+                }
+
                 Log.i(TAG, "Successfully refreshed rolling alarms following $action")
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to reschedule alarms after $action", e)

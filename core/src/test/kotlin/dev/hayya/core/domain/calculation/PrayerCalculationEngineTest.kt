@@ -296,4 +296,53 @@ class PrayerCalculationEngineTest {
         assertThat(sunriseWindow.endEpochMillis).isEqualTo(dailyTimes.dhuhr)
         assertThat(sunriseWindow.elapsedProgress).isWithin(0.01f).of(0.5f)
     }
+
+    @Test
+    fun upcomingTimeFor_afterIshaBeforeMidnight_targetsTomorrowsFajr() {
+        val times = engine.computeDailyTimes(
+            date = fixedDate,
+            coordinates = makkahCoords,
+            method = CalculationMethod.UMM_AL_QURA
+        )
+        val afterIsha = times.isha + 60_000L
+
+        // Regression: today's Fajr is already in the past, so it must never be the countdown target
+        assertThat(times.upcomingTimeFor(PrayerType.FAJR, afterIsha)).isEqualTo(times.nextDayFajr)
+        assertThat(times.upcomingTimeFor(PrayerType.FAJR, afterIsha)).isGreaterThan(afterIsha)
+    }
+
+    @Test
+    fun upcomingTimeFor_beforeFajr_targetsTodaysFajr_andOtherPrayersUnchanged() {
+        val times = engine.computeDailyTimes(
+            date = fixedDate,
+            coordinates = makkahCoords,
+            method = CalculationMethod.UMM_AL_QURA
+        )
+        val beforeFajr = times.fajr - 60_000L
+
+        assertThat(times.upcomingTimeFor(PrayerType.FAJR, beforeFajr)).isEqualTo(times.fajr)
+        assertThat(times.upcomingTimeFor(PrayerType.DHUHR, times.isha)).isEqualTo(times.dhuhr)
+    }
+
+    @Test
+    fun computeDailyTimes_calculatesIslamicMidnightAndLastThirdChronologically() {
+        val times = engine.computeDailyTimes(
+            date = fixedDate,
+            coordinates = makkahCoords,
+            method = CalculationMethod.UMM_AL_QURA
+        )
+
+        val nightDuration = times.nextDayFajr - times.maghrib
+
+        // Islamic Midnight = Maghrib + nightDuration / 2
+        assertThat(times.islamicMidnight).isEqualTo(times.maghrib + (nightDuration / 2L))
+
+        // Last Third = Maghrib + 2 * nightDuration / 3
+        assertThat(times.lastThirdOfTheNight).isEqualTo(times.maghrib + ((2L * nightDuration) / 3L))
+
+        // Chronological order: Maghrib < Midnight < Last Third < NextDayFajr
+        assertThat(times.maghrib).isLessThan(times.islamicMidnight)
+        assertThat(times.islamicMidnight).isLessThan(times.lastThirdOfTheNight)
+        assertThat(times.lastThirdOfTheNight).isLessThan(times.nextDayFajr)
+    }
 }

@@ -4,9 +4,6 @@ import android.Manifest
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.location.Geocoder
-import android.location.Location
-import android.location.LocationManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -30,6 +27,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.NotificationsActive
@@ -40,6 +38,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -62,17 +61,19 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import dev.hayya.core.HayyaApplication
 import dev.hayya.core.system.device.OemBatteryHelper
+import dev.hayya.core.system.notifications.PinnedPrayerStatusService
+import dev.hayya.core.system.oem.OemPowerManager
+import dev.hayya.core.ui.components.AppNavTab
+import dev.hayya.core.ui.components.FloatingNavBar
 import dev.hayya.core.ui.screens.MainDashboardScreen
 import dev.hayya.core.ui.screens.OnboardingScreen
+import dev.hayya.core.ui.screens.QiblaScreen
+import dev.hayya.core.ui.screens.RamadanScreen
 import dev.hayya.core.ui.screens.SettingsScreen
-import dev.hayya.core.ui.theme.CardBorderColor
-import dev.hayya.core.ui.theme.ElevatedCardSurface
+import dev.hayya.core.ui.screens.TasbihScreen
+import dev.hayya.core.ui.screens.ToolsScreen
 import dev.hayya.core.ui.theme.HayyaTheme
-import dev.hayya.core.ui.theme.OledBackground
 import dev.hayya.core.ui.theme.TabularClockStyle
-import dev.hayya.core.ui.theme.TextPrimary
-import dev.hayya.core.ui.theme.TextSecondary
-import dev.hayya.core.ui.theme.WarmSandAccent
 import dev.hayya.core.ui.viewmodel.PrayerViewModel
 import dev.hayya.core.widget.PrayerWidgetUpdater
 import kotlinx.coroutines.Dispatchers
@@ -93,16 +94,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private val locationPermissionLauncher = registerForActivityResult(
-        ActivityResultContracts.RequestMultiplePermissions()
-    ) { permissions ->
-        val fineGranted = permissions[Manifest.permission.ACCESS_FINE_LOCATION] ?: false
-        val coarseGranted = permissions[Manifest.permission.ACCESS_COARSE_LOCATION] ?: false
-        if (fineGranted || coarseGranted) {
-            fetchDeviceLocation()
-        }
-    }
-
     private val viewModel: PrayerViewModel by viewModels {
         object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
@@ -111,7 +102,9 @@ class MainActivity : ComponentActivity() {
                 return PrayerViewModel(
                     calculationEngine = app.calculationEngine,
                     preferencesRepository = app.preferencesRepository,
-                    alarmScheduler = app.alarmScheduler
+                    alarmScheduler = app.alarmScheduler,
+                    prayerLogRepository = app.prayerLogRepository,
+                    fastTrackerRepository = app.fastTrackerRepository
                 ) as T
             }
         }
@@ -135,12 +128,15 @@ class MainActivity : ComponentActivity() {
         }
 
         setContent {
-            HayyaTheme {
+            val state by viewModel.uiState.collectAsStateWithLifecycle()
+            val themeMode = state.userPreferences.themeMode
+            val dynamicColor = state.userPreferences.dynamicColorEnabled
+
+            HayyaTheme(themeMode = themeMode, dynamicColor = dynamicColor) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
-                    color = OledBackground
+                    color = MaterialTheme.colorScheme.background
                 ) {
-                    val state by viewModel.uiState.collectAsStateWithLifecycle()
                     var isBatteryIgnored by remember {
                         mutableStateOf(OemBatteryHelper.isIgnoringBatteryOptimizations(this@MainActivity))
                     }
@@ -151,67 +147,179 @@ class MainActivity : ComponentActivity() {
                     val missingPermissions by missingPermissionsState
 
                     LaunchedEffect(Unit) {
-                        isBatteryIgnored = OemBatteryHelper.isIgnoringBatteryOptimizations(this@MainActivity)
+                        isBatteryIgnored = OemPowerManager.isBatteryOptimizationIgnored(this@MainActivity)
                         isExactAlarmGranted = app.alarmScheduler.canScheduleExactAlarms()
                         checkPermissionsState()
-                        fetchDeviceLocation()
                     }
 
-                    // Item 1: Back Button in Settings navigates back to Dashboard
-                    BackHandler(enabled = state.isSettingsOpen) {
-                        viewModel.setSettingsOpen(false)
+                    LaunchedEffect(state.userPreferences.pinnedNotificationEnabled) {
+                        if (state.userPreferences.pinnedNotificationEnabled) {
+                            PinnedPrayerStatusService.start(this@MainActivity)
+                        } else {
+                            PinnedPrayerStatusService.stop(this@MainActivity)
+                        }
                     }
 
-                    // Item 2: Back Button on Home asks first before closing
-                    BackHandler(enabled = !state.isSettingsOpen) {
+                    // Back Button in Ramadan navigates back to Companion or Dashboard
+                    BackHandler(enabled = state.isRamadanOpen) {
+                        viewModel.setRamadanOpen(false)
+                    }
+
+                    // Back Button in Tasbih navigates back to Tools
+                    BackHandler(enabled = state.isTasbihOpen) {
+                        viewModel.setTasbihOpen(false)
+                    }
+
+                    // Back Button in Qibla navigates back to Tools
+                    BackHandler(enabled = state.isQiblaOpen) {
+                        viewModel.setQiblaOpen(false)
+                    }
+
+                    // Back Button on Tools or Settings navigates back to Dashboard
+                    BackHandler(enabled = !state.isRamadanOpen && !state.isTasbihOpen && !state.isQiblaOpen && state.currentTab != AppNavTab.DASHBOARD) {
+                        viewModel.selectNavTab(AppNavTab.DASHBOARD)
+                    }
+
+                    // Back Button on Dashboard asks first before closing
+                    BackHandler(enabled = !state.isRamadanOpen && !state.isTasbihOpen && !state.isQiblaOpen && state.currentTab == AppNavTab.DASHBOARD) {
                         showExitDialog = true
                     }
 
-                    if (state.isSettingsOpen) {
-                        SettingsScreen(
-                            userPreferences = state.userPreferences,
-                            isBatteryOptimizationIgnored = isBatteryIgnored,
-                            onBackClick = { viewModel.setSettingsOpen(false) },
-                            onSelectAutoSilence = { viewModel.updateAutoSilence(it) },
-                            onSelectMadhab = { viewModel.updateJuristicMethod(it) },
-                            onSelectCalculationMethod = { viewModel.updateCalculationMethod(it) },
-                            onToggleIshaMidnight = { viewModel.updateIshaExpiresAtMidnight(it) },
-                            onTogglePreReminder = { viewModel.togglePreReminder(it) },
-                            onToggleLastCall = { viewModel.toggleLastCall(it) },
-                            onSelectHighLatitudeRule = { viewModel.updateHighLatitudeRule(it) },
-                            onUpdatePrayerOffset = { prayer, offset ->
-                                viewModel.updatePrayerOffset(prayer, offset)
-                            },
-                            onLaunchBatterySettings = {
-                                // Item 3: Directly opens App battery usage / App Info
-                                OemBatteryHelper.openBatteryUsageSettings(this@MainActivity)
-                                isBatteryIgnored = OemBatteryHelper.isIgnoringBatteryOptimizations(this@MainActivity)
-                            },
-                            onTriggerTestAlarm = { delaySeconds ->
-                                // Item 8: Test Alarm Simulator
-                                viewModel.scheduleTestAlarm(delaySeconds)
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        when {
+                            state.isRamadanOpen -> {
+                                RamadanScreen(
+                                    state = state,
+                                    calculationEngine = app.calculationEngine,
+                                    onBackClick = { viewModel.setRamadanOpen(false) },
+                                    onToggleTodayFast = { viewModel.toggleTodayFast() },
+                                    onSetFastStatus = { date, status -> viewModel.setFastStatus(date, status) },
+                                    onCycleFastStatus = { date -> viewModel.cycleFastStatus(date) },
+                                    onUpdateQadhaMadeUp = { viewModel.updateQadhaMadeUp(it) },
+                                    onUpdateSuhoorAlarm = { enabled, mins -> viewModel.updateSuhoorAlarm(enabled, mins) },
+                                    onUpdateIftarAlert = { viewModel.updateIftarAlert(it) },
+                                    onUpdateEidAlert = { viewModel.updateEidAlert(it) }
+                                )
                             }
-                        )
-                    } else {
-                        MainDashboardScreen(
-                            state = state,
-                            onOpenSettings = { viewModel.setSettingsOpen(true) },
-                            onToggleAudioMode = { viewModel.togglePrayerAudioMode(it) }
-                        )
+                            state.isTasbihOpen -> {
+                                TasbihScreen(
+                                    count = state.tasbihCount,
+                                    targetMode = state.tasbihMode,
+                                    onIncrement = { viewModel.incrementTasbih() },
+                                    onReset = { viewModel.resetTasbih() },
+                                    onSelectMode = { viewModel.setTasbihMode(it) },
+                                    onBackClick = { viewModel.setTasbihOpen(false) }
+                                )
+                            }
+                            state.isQiblaOpen -> {
+                                QiblaScreen(
+                                    locationName = state.locationName,
+                                    latitude = state.userPreferences.location.latitude,
+                                    longitude = state.userPreferences.location.longitude,
+                                    onBackClick = { viewModel.setQiblaOpen(false) }
+                                )
+                            }
+                            else -> {
+                                when (state.currentTab) {
+                                    AppNavTab.DASHBOARD -> {
+                                        MainDashboardScreen(
+                                            state = state,
+                                            onOpenSettings = { viewModel.selectNavTab(AppNavTab.SETTINGS) },
+                                            onOpenTasbih = { viewModel.setTasbihOpen(true) },
+                                            onOpenQibla = { viewModel.setQiblaOpen(true) },
+                                            onOpenRamadan = { viewModel.setRamadanOpen(true) },
+                                            onToggleAudioMode = { viewModel.togglePrayerAudioMode(it) },
+                                            onTogglePrayerCompletion = { viewModel.togglePrayerCompletion(it) },
+                                            onToggleNightFastingCard = { viewModel.toggleNightFastingCardExpanded() },
+                                            onToggleTahajjudAlarm = { viewModel.toggleTahajjudAlarm(it) },
+                                            onToggleSurahKahfRead = { viewModel.toggleSurahKahfRead() },
+                                            onActivateKhutbahMute = { viewModel.activateKhutbahAutoMute(this@MainActivity) },
+                                            onRestoreRingerMode = { viewModel.restoreNormalRingerMode(this@MainActivity) }
+                                        )
+                                    }
+                                    AppNavTab.TOOLS -> {
+                                        ToolsScreen(
+                                            state = state,
+                                            onOpenCompass = { viewModel.setQiblaOpen(true) },
+                                            onOpenTasbih = { viewModel.setTasbihOpen(true) },
+                                            onOpenRamadan = { viewModel.setRamadanOpen(true) },
+                                            onIncrementTasbih = { viewModel.incrementTasbih() },
+                                            onTogglePrayerCompletion = { viewModel.togglePrayerCompletion(it) },
+                                            onTogglePostAdhanDua = { viewModel.togglePostAdhanDua(it) },
+                                            onToggleTahajjudAlarm = { viewModel.toggleTahajjudAlarm(it) },
+                                            onLaunchBatterySettings = {
+                                                OemPowerManager.openBatteryUsageSettings(this@MainActivity)
+                                                isBatteryIgnored = OemPowerManager.isBatteryOptimizationIgnored(this@MainActivity)
+                                            },
+                                            onTriggerTestAlarm = { delaySeconds ->
+                                                viewModel.scheduleTestAlarm(delaySeconds)
+                                            }
+                                        )
+                                    }
+                                    AppNavTab.SETTINGS -> {
+                                        SettingsScreen(
+                                            userPreferences = state.userPreferences,
+                                            isBatteryOptimizationIgnored = isBatteryIgnored,
+                                            onBackClick = { viewModel.selectNavTab(AppNavTab.DASHBOARD) },
+                                            onSelectThemeMode = { viewModel.updateThemeMode(it) },
+                                            onToggleDynamicColor = { viewModel.updateDynamicColorEnabled(it) },
+                                            onSelectAutoSilence = { viewModel.updateAutoSilence(it) },
+                                            onSelectAutoMuteDuration = { viewModel.updateAutoMuteDuration(it) },
+                                            onSelectFridayAutoMuteDuration = { viewModel.updateFridayAutoMuteDuration(it) },
+                                            onSelectAutoMuteTargetMode = { viewModel.updateAutoMuteTargetMode(it) },
+                                            onSelectMadhab = { viewModel.updateJuristicMethod(it) },
+                                            onSelectCalculationMethod = { viewModel.updateCalculationMethod(it) },
+                                            onToggleIshaMidnight = { viewModel.updateIshaExpiresAtMidnight(it) },
+                                            onTogglePreReminder = { viewModel.togglePreReminder(it) },
+                                            onToggleLastCall = { viewModel.toggleLastCall(it) },
+                                            onTogglePinnedNotification = { viewModel.togglePinnedNotification(it) },
+                                            onTogglePostAdhanDua = { viewModel.togglePostAdhanDua(it) },
+                                            onSelectVolumeEscalation = { viewModel.updateVolumeEscalation(it) },
+                                            onToggleTahajjudAlarm = { viewModel.toggleTahajjudAlarm(it) },
+                                            onSelectHighLatitudeRule = { viewModel.updateHighLatitudeRule(it) },
+                                            onUpdatePrayerOffset = { prayer, offset ->
+                                                viewModel.updatePrayerOffset(prayer, offset)
+                                            },
+                                            onLaunchBatterySettings = {
+                                                OemPowerManager.openBatteryUsageSettings(this@MainActivity)
+                                                isBatteryIgnored = OemPowerManager.isBatteryOptimizationIgnored(this@MainActivity)
+                                            },
+                                            onTriggerTestAlarm = { delaySeconds ->
+                                                viewModel.scheduleTestAlarm(delaySeconds)
+                                            },
+                                            onUpdateLocation = { lat, lng, name ->
+                                                viewModel.updateLocation(lat, lng, name)
+                                            }
+                                        )
+                                    }
+                                }
+
+                                // Modern Floating Navbar docked at bottom center
+                                FloatingNavBar(
+                                    currentTab = state.currentTab,
+                                    onTabSelected = { viewModel.selectNavTab(it) },
+                                    modifier = Modifier.align(Alignment.BottomCenter)
+                                )
+                            }
+                        }
                     }
 
-                    // Item 2: Exit Confirmation Dialog
+                    // Exit Confirmation Dialog
                     if (showExitDialog) {
                         AlertDialog(
                             onDismissRequest = { showExitDialog = false },
-                            containerColor = ElevatedCardSurface,
-                            titleContentColor = TextPrimary,
-                            textContentColor = TextSecondary,
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                            titleContentColor = MaterialTheme.colorScheme.onSurface,
+                            textContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
                             shape = RoundedCornerShape(16.dp),
                             title = {
                                 Text(
                                     text = "Exit Hayya?",
-                                    style = TabularClockStyle.copy(fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                                    style = TabularClockStyle.copy(
+                                        fontSize = 17.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
                                 )
                             },
                             text = {
@@ -219,7 +327,7 @@ class MainActivity : ComponentActivity() {
                                     text = "Scheduled prayer alarms and home screen widgets will continue running automatically in the background.",
                                     fontSize = 13.sp,
                                     lineHeight = 18.sp,
-                                    color = TextSecondary
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             },
                             confirmButton = {
@@ -228,14 +336,17 @@ class MainActivity : ComponentActivity() {
                                         showExitDialog = false
                                         finish()
                                     },
-                                    colors = ButtonDefaults.buttonColors(containerColor = WarmSandAccent)
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = MaterialTheme.colorScheme.primary,
+                                        contentColor = MaterialTheme.colorScheme.onPrimary
+                                    )
                                 ) {
-                                    Text("Exit App", color = Color(0xFF141619), fontWeight = FontWeight.Bold)
+                                    Text("Exit App", fontWeight = FontWeight.Bold)
                                 }
                             },
                             dismissButton = {
                                 OutlinedButton(onClick = { showExitDialog = false }) {
-                                    Text("Stay", color = TextPrimary)
+                                    Text("Stay", color = MaterialTheme.colorScheme.onSurface)
                                 }
                             }
                         )
@@ -245,20 +356,26 @@ class MainActivity : ComponentActivity() {
                     if (missingPermissions.isNotEmpty()) {
                         AlertDialog(
                             onDismissRequest = { missingPermissionsState.value = emptyList() },
-                            containerColor = ElevatedCardSurface,
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                            titleContentColor = MaterialTheme.colorScheme.onSurface,
+                            textContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
                             shape = RoundedCornerShape(16.dp),
                             title = {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Icon(
                                         imageVector = Icons.Outlined.Warning,
                                         contentDescription = null,
-                                        tint = WarmSandAccent,
+                                        tint = MaterialTheme.colorScheme.primary,
                                         modifier = Modifier.size(22.dp)
                                     )
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Text(
                                         text = "Permissions Required",
-                                        style = TabularClockStyle.copy(fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                                        style = TabularClockStyle.copy(
+                                            fontSize = 16.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
                                     )
                                 }
                             },
@@ -267,7 +384,7 @@ class MainActivity : ComponentActivity() {
                                     Text(
                                         text = "Hayya requires the following permissions to guarantee exact Adhan alarms:",
                                         fontSize = 13.sp,
-                                        color = TextSecondary
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                     Spacer(modifier = Modifier.height(10.dp))
                                     missingPermissions.forEach { permissionMsg ->
@@ -275,7 +392,7 @@ class MainActivity : ComponentActivity() {
                                             text = "• $permissionMsg",
                                             fontSize = 12.sp,
                                             fontWeight = FontWeight.Medium,
-                                            color = TextPrimary
+                                            color = MaterialTheme.colorScheme.onSurface
                                         )
                                     }
                                 }
@@ -285,14 +402,17 @@ class MainActivity : ComponentActivity() {
                                     onClick = {
                                         requestNextMissingPermission()
                                     },
-                                    colors = ButtonDefaults.buttonColors(containerColor = WarmSandAccent)
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = MaterialTheme.colorScheme.primary,
+                                        contentColor = MaterialTheme.colorScheme.onPrimary
+                                    )
                                 ) {
-                                    Text("Grant Permissions", color = Color(0xFF141619), fontWeight = FontWeight.Bold)
+                                    Text("Grant Permissions", fontWeight = FontWeight.Bold)
                                 }
                             },
                             dismissButton = {
                                 OutlinedButton(onClick = { missingPermissionsState.value = emptyList() }) {
-                                    Text("Dismiss", color = TextSecondary)
+                                    Text("Dismiss", color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                             }
                         )
@@ -356,64 +476,5 @@ class MainActivity : ComponentActivity() {
         }
 
         missingPermissionsState.value = emptyList()
-    }
-
-    private fun requestLocationUpdates() {
-        locationPermissionLauncher.launch(
-            arrayOf(
-                Manifest.permission.ACCESS_FINE_LOCATION,
-                Manifest.permission.ACCESS_COARSE_LOCATION
-            )
-        )
-    }
-
-    /**
-     * Item 6: Resolves real city and country using Geocoder or sets canonical region.
-     */
-    private fun fetchDeviceLocation() {
-        lifecycleScope.launch(Dispatchers.IO) {
-            try {
-                val hasFine = ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
-                val hasCoarse = ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
-
-                if (!hasFine && !hasCoarse) return@launch
-
-                val locationManager = getSystemService(Context.LOCATION_SERVICE) as? LocationManager ?: return@launch
-                val lastLocation: Location? = try {
-                    locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER)
-                        ?: locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)
-                } catch (se: SecurityException) {
-                    null
-                }
-
-                lastLocation?.let { loc ->
-                    var resolvedName: String? = null
-                    try {
-                        val geocoder = Geocoder(this@MainActivity, Locale.getDefault())
-                        @Suppress("DEPRECATION")
-                        val addresses = geocoder.getFromLocation(loc.latitude, loc.longitude, 1)
-                        if (!addresses.isNullOrEmpty()) {
-                            val addr = addresses[0]
-                            val city = addr.locality ?: addr.subAdminArea ?: addr.adminArea
-                            val country = addr.countryName
-                            resolvedName = if (city != null && country != null) {
-                                "$city, $country"
-                            } else {
-                                city ?: country
-                            }
-                        }
-                    } catch (_: Exception) {
-                        // Geocoder service unavailable (e.g. offline)
-                    }
-
-                    val finalLocationName = resolvedName ?: "Current Location"
-                    withContext(Dispatchers.Main) {
-                        viewModel.updateLocation(loc.latitude, loc.longitude, finalLocationName)
-                    }
-                }
-            } catch (_: Exception) {
-                // Keep default convention location if resolution fails
-            }
-        }
     }
 }

@@ -42,6 +42,7 @@ class PrayerAudioService : Service() {
 
     private val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private var fadeOutJob: Job? = null
+    private var escalationJob: Job? = null
 
     private var mediaPlayer: MediaPlayer? = null
     private var wakeLock: PowerManager.WakeLock? = null
@@ -69,12 +70,14 @@ class PrayerAudioService : Service() {
                 val soundUriString = intent?.getStringExtra(EXTRA_SOUND_URI)
                 val timeoutSeconds = intent?.getIntExtra(EXTRA_TIMEOUT_SECONDS, DEFAULT_TIMEOUT_SECONDS)
                     ?: DEFAULT_TIMEOUT_SECONDS
+                val escalationSeconds = intent?.getIntExtra(EXTRA_VOLUME_ESCALATION_SECONDS, DEFAULT_ESCALATION_SECONDS)
+                    ?: DEFAULT_ESCALATION_SECONDS
                 val prayerName = intent?.getStringExtra(EXTRA_PRAYER_NAME) ?: "Prayer"
                 val notificationId = intent?.getIntExtra(EXTRA_NOTIFICATION_ID, DEFAULT_NOTIFICATION_ID)
                     ?: DEFAULT_NOTIFICATION_ID
 
                 startForegroundServiceWithNotification(notificationId, prayerName)
-                startPlayback(soundUriString, timeoutSeconds)
+                startPlayback(soundUriString, timeoutSeconds, escalationSeconds)
             }
             ACTION_MUTE -> {
                 mutePlayback()
@@ -87,7 +90,7 @@ class PrayerAudioService : Service() {
         return START_NOT_STICKY
     }
 
-    private fun startPlayback(soundUriString: String?, timeoutSeconds: Int) {
+    private fun startPlayback(soundUriString: String?, timeoutSeconds: Int, escalationSeconds: Int = 0) {
         stopPlaybackOnly()
 
         // Acquire WakeLock for continuous audio playback through device deep sleep
@@ -117,16 +120,50 @@ class PrayerAudioService : Service() {
                     stopPlaybackAndSelf()
                     true
                 }
-                prepare()
-                setVolume(1.0f, 1.0f)
-                start()
+                setOnPreparedListener { player ->
+                    if (escalationSeconds > 0) {
+                        player.setVolume(0.10f, 0.10f)
+                        player.start()
+                        scheduleVolumeEscalation(escalationSeconds)
+                    } else {
+                        player.setVolume(1.0f, 1.0f)
+                        player.start()
+                    }
+                    scheduleFadeOut(timeoutSeconds)
+                    Log.i(TAG, "Started prayer audio playback with timeout ${timeoutSeconds}s, escalation ${escalationSeconds}s")
+                }
+                prepareAsync()
             }
-
-            scheduleFadeOut(timeoutSeconds)
-            Log.i(TAG, "Started prayer audio playback with timeout ${timeoutSeconds}s")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to initialize MediaPlayer for URI: $soundUri", e)
             stopPlaybackAndSelf()
+        }
+    }
+
+    private fun scheduleVolumeEscalation(escalationSeconds: Int) {
+        escalationJob?.cancel()
+        if (escalationSeconds <= 0) return
+
+        escalationJob = serviceScope.launch {
+            val initialVolume = 0.10f
+            val targetVolume = 1.0f
+            val stepIntervalMs = 1500L
+            val totalDurationMs = escalationSeconds * 1000L
+            val totalSteps = (totalDurationMs / stepIntervalMs).toInt().coerceAtLeast(1)
+            val volumeStep = (targetVolume - initialVolume) / totalSteps
+
+            for (step in 1..totalSteps) {
+                delay(stepIntervalMs)
+                val currentVol = (initialVolume + step * volumeStep).coerceAtMost(targetVolume)
+                try {
+                    mediaPlayer?.setVolume(currentVol, currentVol)
+                } catch (e: Exception) {
+                    break
+                }
+            }
+            try {
+                mediaPlayer?.setVolume(targetVolume, targetVolume)
+            } catch (_: Exception) {}
         }
     }
 
@@ -160,6 +197,8 @@ class PrayerAudioService : Service() {
     }
 
     private fun mutePlayback() {
+        escalationJob?.cancel()
+        escalationJob = null
         try {
             mediaPlayer?.setVolume(0.0f, 0.0f)
             Log.i(TAG, "Playback muted by user request")
@@ -169,6 +208,8 @@ class PrayerAudioService : Service() {
     }
 
     private fun stopPlaybackOnly() {
+        escalationJob?.cancel()
+        escalationJob = null
         fadeOutJob?.cancel()
         fadeOutJob = null
 
@@ -191,6 +232,11 @@ class PrayerAudioService : Service() {
         if (wakeLock?.isHeld == true) {
             wakeLock?.release()
         }
+
+        val finishedBroadcast = Intent(ACTION_PLAYBACK_FINISHED).apply {
+            setPackage(packageName)
+        }
+        sendBroadcast(finishedBroadcast)
 
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
@@ -292,13 +338,16 @@ class PrayerAudioService : Service() {
         const val ACTION_START_ALARM = "dev.hayya.audio.ACTION_START_ALARM"
         const val ACTION_MUTE = "dev.hayya.audio.ACTION_MUTE"
         const val ACTION_STOP = "dev.hayya.audio.ACTION_STOP"
+        const val ACTION_PLAYBACK_FINISHED = "dev.hayya.audio.ACTION_PLAYBACK_FINISHED"
 
         const val EXTRA_SOUND_URI = "extra_sound_uri"
         const val EXTRA_TIMEOUT_SECONDS = "extra_timeout_seconds"
+        const val EXTRA_VOLUME_ESCALATION_SECONDS = "extra_volume_escalation_seconds"
         const val EXTRA_PRAYER_NAME = "extra_prayer_name"
         const val EXTRA_NOTIFICATION_ID = "extra_notification_id"
 
         const val DEFAULT_TIMEOUT_SECONDS = 60
+        const val DEFAULT_ESCALATION_SECONDS = 0
         const val DEFAULT_NOTIFICATION_ID = 99999
     }
 }

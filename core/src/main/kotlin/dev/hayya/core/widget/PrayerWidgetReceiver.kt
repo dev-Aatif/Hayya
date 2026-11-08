@@ -20,8 +20,13 @@ class CompactPrayerWidgetReceiver : GlanceAppWidgetReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         super.onReceive(context, intent)
         if (intent.action == PrayerWidgetUpdater.ACTION_PRAYER_DATA_CHANGED) {
+            val pendingResult = goAsync()
             CoroutineScope(Dispatchers.Default + SupervisorJob()).launch {
-                PrayerWidgetUpdater.updateAllWidgets(context)
+                try {
+                    PrayerWidgetUpdater.updateAllWidgets(context)
+                } finally {
+                    pendingResult?.finish()
+                }
             }
         }
     }
@@ -36,8 +41,34 @@ class FullTimetableWidgetReceiver : GlanceAppWidgetReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         super.onReceive(context, intent)
         if (intent.action == PrayerWidgetUpdater.ACTION_PRAYER_DATA_CHANGED) {
+            val pendingResult = goAsync()
             CoroutineScope(Dispatchers.Default + SupervisorJob()).launch {
-                PrayerWidgetUpdater.updateAllWidgets(context)
+                try {
+                    PrayerWidgetUpdater.updateAllWidgets(context)
+                } finally {
+                    pendingResult?.finish()
+                }
+            }
+        }
+    }
+}
+
+/**
+ * GlanceAppWidgetReceiver managing the DailyPrayersWidget lifecycle.
+ */
+class DailyPrayersWidgetReceiver : GlanceAppWidgetReceiver() {
+    override val glanceAppWidget: GlanceAppWidget = DailyPrayersWidget()
+
+    override fun onReceive(context: Context, intent: Intent) {
+        super.onReceive(context, intent)
+        if (intent.action == PrayerWidgetUpdater.ACTION_PRAYER_DATA_CHANGED) {
+            val pendingResult = goAsync()
+            CoroutineScope(Dispatchers.Default + SupervisorJob()).launch {
+                try {
+                    PrayerWidgetUpdater.updateAllWidgets(context)
+                } finally {
+                    pendingResult?.finish()
+                }
             }
         }
     }
@@ -50,8 +81,13 @@ class PrayerWidgetReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent?) {
         if (intent?.action == PrayerWidgetUpdater.ACTION_PRAYER_DATA_CHANGED) {
             Log.d("PrayerWidgetReceiver", "Received ACTION_PRAYER_DATA_CHANGED, refreshing all widgets")
+            val pendingResult = goAsync()
             CoroutineScope(Dispatchers.Default + SupervisorJob()).launch {
-                PrayerWidgetUpdater.updateAllWidgets(context)
+                try {
+                    PrayerWidgetUpdater.updateAllWidgets(context)
+                } finally {
+                    pendingResult?.finish()
+                }
             }
         }
     }
