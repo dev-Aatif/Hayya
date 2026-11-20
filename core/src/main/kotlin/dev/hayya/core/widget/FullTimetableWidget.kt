@@ -1,7 +1,6 @@
 package dev.hayya.core.widget
 
 import android.content.Context
-import android.content.Intent
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -9,6 +8,7 @@ import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
+import androidx.glance.appwidget.LinearProgressIndicator
 import androidx.glance.appwidget.SizeMode
 import androidx.glance.appwidget.action.actionStartActivity
 import androidx.glance.appwidget.cornerRadius
@@ -30,10 +30,9 @@ import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
 import dev.hayya.core.domain.model.PrayerType
-import dev.hayya.core.ui.MainActivity
 
 /**
- * Wide 4x2 dual-pane AppWidget showing countdown hero and full daily prayer timetable.
+ * Wide 4x2 dual-pane AppWidget showing the next prayer hero and full 5-prayer timetable with checkmarks.
  */
 class FullTimetableWidget : GlanceAppWidget() {
 
@@ -41,50 +40,68 @@ class FullTimetableWidget : GlanceAppWidget() {
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val snapshot = PrayerWidgetUpdater.loadCurrentSnapshot(context)
+        val palette = WidgetTheme.paletteFor(snapshot.themeMode)
+
+        // During Sunrise interval, highlight Dhuhr as the next prayer in the 5-prayer timetable
+        val highlightedPrayer = if (snapshot.nextPrayerType == PrayerType.SUNRISE) {
+            PrayerType.DHUHR
+        } else {
+            snapshot.nextPrayerType
+        }
 
         provideContent {
-            // Container with 1px border (#1F2328) and 24dp corner radii
             Box(
                 modifier = GlanceModifier
                     .fillMaxSize()
                     .cornerRadius(24.dp)
-                    .background(ColorProvider(Color(0xFF1F2328)))
+                    .background(palette.border)
                     .padding(1.dp)
-                    .clickable(actionStartActivity(Intent(context, MainActivity::class.java)))
+                    .clickable(actionStartActivity(WidgetTheme.launchIntent(context)))
             ) {
                 Box(
                     modifier = GlanceModifier
                         .fillMaxSize()
                         .cornerRadius(23.dp)
-                        .background(ColorProvider(Color(0xFF121417)))
-                        .padding(horizontal = 16.dp, vertical = 12.dp)
+                        .background(palette.surface)
+                        .padding(horizontal = 14.dp, vertical = 12.dp)
                 ) {
                     Row(
                         modifier = GlanceModifier.fillMaxSize(),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // Left Column (Hero ~40% width)
+                        // Left Column: Next Prayer Hero
                         Column(
                             modifier = GlanceModifier
-                                .defaultWeight()
-                                .fillMaxHeight(),
+                                .width(124.dp)
+                                .fillMaxHeight()
+                                .padding(end = 10.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = "NEXT PRAYER",
+                                text = snapshot.locationName,
+                                maxLines = 1,
                                 style = TextStyle(
-                                    color = ColorProvider(Color(0xFF767E8B)),
+                                    color = palette.textSecondary,
                                     fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold
+                                    fontWeight = FontWeight.Medium
                                 )
                             )
 
-                            Spacer(modifier = GlanceModifier.height(2.dp))
+                            Spacer(modifier = GlanceModifier.defaultWeight())
+
+                            Text(
+                                text = "Next Prayer",
+                                style = TextStyle(
+                                    color = palette.textMuted,
+                                    fontSize = 10.sp
+                                )
+                            )
 
                             Text(
                                 text = snapshot.nextPrayerName,
+                                maxLines = 1,
                                 style = TextStyle(
-                                    color = ColorProvider(Color(0xFFE5C378)),
+                                    color = palette.accent,
                                     fontSize = 20.sp,
                                     fontWeight = FontWeight.Bold
                                 )
@@ -92,46 +109,62 @@ class FullTimetableWidget : GlanceAppWidget() {
 
                             Text(
                                 text = snapshot.nextPrayerTimeFormatted,
+                                maxLines = 1,
                                 style = TextStyle(
-                                    color = ColorProvider(Color(0xFFFFFFFF)),
+                                    color = palette.textPrimary,
                                     fontSize = 17.sp,
                                     fontWeight = FontWeight.Bold
                                 )
                             )
 
-                            Spacer(modifier = GlanceModifier.height(4.dp))
+                            Spacer(modifier = GlanceModifier.height(3.dp))
 
                             Text(
                                 text = snapshot.countdownFormatted,
+                                maxLines = 1,
                                 style = TextStyle(
-                                    color = ColorProvider(Color(0xFFE5C378)),
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Medium
+                                    color = palette.textSecondary,
+                                    fontSize = 11.sp
                                 )
                             )
 
-                            Spacer(modifier = GlanceModifier.height(2.dp))
+                            Spacer(modifier = GlanceModifier.height(6.dp))
 
-                            Text(
-                                text = snapshot.locationName,
-                                style = TextStyle(
-                                    color = ColorProvider(Color(0xFF525A66)),
-                                    fontSize = 10.sp
-                                )
+                            LinearProgressIndicator(
+                                progress = snapshot.windowProgress.coerceIn(0f, 1f),
+                                modifier = GlanceModifier
+                                    .fillMaxWidth()
+                                    .height(3.dp)
+                                    .cornerRadius(2.dp),
+                                color = palette.accent,
+                                backgroundColor = palette.trackBg
                             )
+
+                            Spacer(modifier = GlanceModifier.defaultWeight())
+
+                            if (snapshot.hijriDateShort.isNotEmpty()) {
+                                Text(
+                                    text = snapshot.hijriDateShort,
+                                    maxLines = 1,
+                                    style = TextStyle(
+                                        color = palette.textMuted,
+                                        fontSize = 10.sp
+                                    )
+                                )
+                            }
                         }
 
-                        // Divider line
+                        // Divider
                         Box(
                             modifier = GlanceModifier
                                 .width(1.dp)
                                 .fillMaxHeight()
-                                .background(ColorProvider(Color(0xFF1F2328)))
+                                .background(palette.border)
                         ) {}
 
-                        Spacer(modifier = GlanceModifier.width(12.dp))
+                        Spacer(modifier = GlanceModifier.width(10.dp))
 
-                        // Right Column (Timetable ~60% width): 5 rows (Fajr, Dhuhr, Asr, Maghrib, Isha)
+                        // Right Column: 5 Daily Prayer Rows
                         Column(
                             modifier = GlanceModifier
                                 .defaultWeight()
@@ -139,45 +172,48 @@ class FullTimetableWidget : GlanceAppWidget() {
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             snapshot.dailyTimes.forEach { (prayer, timeString) ->
-                                val prayerDisplayName = prayer.displayName(snapshot.isFriday)
+                                val prayerDisplayName = WidgetTheme.shortPrayerLabel(prayer, snapshot.isFriday)
                                 val isPast = snapshot.pastPrayers.contains(prayer)
-                                val isUpcoming = snapshot.nextPrayerName.equals(prayerDisplayName, ignoreCase = true)
+                                val isDone = snapshot.completedPrayers.contains(prayer)
+                                val isUpcoming = prayer == highlightedPrayer
 
                                 val textColor = when {
-                                    isUpcoming -> Color(0xFFE5C378)
-                                    isPast -> Color(0xFF525A66) // 40% dimmed
-                                    else -> Color(0xFFFFFFFF)
+                                    isUpcoming -> palette.accent
+                                    isPast && !isDone -> palette.textMuted
+                                    else -> palette.textPrimary
                                 }
 
                                 Box(
                                     modifier = GlanceModifier
                                         .fillMaxWidth()
-                                        .padding(vertical = 2.dp)
-                                        .cornerRadius(4.dp)
+                                        .padding(vertical = 1.5.dp)
+                                        .cornerRadius(6.dp)
                                         .background(
-                                            if (isUpcoming) ColorProvider(Color(0x22E5C378))
+                                            if (isUpcoming) palette.activeRowBg
                                             else ColorProvider(Color.Transparent)
                                         )
-                                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                                        .padding(horizontal = 7.dp, vertical = 3.dp)
                                 ) {
                                     Row(
                                         modifier = GlanceModifier.fillMaxWidth(),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Text(
-                                            text = prayerDisplayName,
+                                            text = if (isDone) "✓ $prayerDisplayName" else prayerDisplayName,
+                                            maxLines = 1,
                                             style = TextStyle(
-                                                color = ColorProvider(textColor),
+                                                color = if (isDone && !isUpcoming) palette.accent else textColor,
                                                 fontSize = 11.sp,
-                                                fontWeight = if (isUpcoming) FontWeight.Bold else FontWeight.Normal
+                                                fontWeight = if (isUpcoming || isDone) FontWeight.Bold else FontWeight.Medium
                                             ),
                                             modifier = GlanceModifier.defaultWeight()
                                         )
 
                                         Text(
                                             text = timeString,
+                                            maxLines = 1,
                                             style = TextStyle(
-                                                color = ColorProvider(textColor),
+                                                color = textColor,
                                                 fontSize = 11.sp,
                                                 fontWeight = if (isUpcoming) FontWeight.Bold else FontWeight.Normal
                                             )

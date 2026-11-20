@@ -75,6 +75,48 @@ class DailyPrayersWidgetReceiver : GlanceAppWidgetReceiver() {
 }
 
 /**
+ * GlanceAppWidgetReceiver managing the 4x1 NextPrayerBannerWidget lifecycle.
+ */
+class NextPrayerBannerWidgetReceiver : GlanceAppWidgetReceiver() {
+    override val glanceAppWidget: GlanceAppWidget = NextPrayerBannerWidget()
+
+    override fun onReceive(context: Context, intent: Intent) {
+        super.onReceive(context, intent)
+        if (intent.action == PrayerWidgetUpdater.ACTION_PRAYER_DATA_CHANGED) {
+            val pendingResult = goAsync()
+            CoroutineScope(Dispatchers.Default + SupervisorJob()).launch {
+                try {
+                    PrayerWidgetUpdater.updateAllWidgets(context)
+                } finally {
+                    pendingResult?.finish()
+                }
+            }
+        }
+    }
+}
+
+/**
+ * GlanceAppWidgetReceiver managing the 3x2 FastingAndNightWidget lifecycle.
+ */
+class FastingAndNightWidgetReceiver : GlanceAppWidgetReceiver() {
+    override val glanceAppWidget: GlanceAppWidget = FastingAndNightWidget()
+
+    override fun onReceive(context: Context, intent: Intent) {
+        super.onReceive(context, intent)
+        if (intent.action == PrayerWidgetUpdater.ACTION_PRAYER_DATA_CHANGED) {
+            val pendingResult = goAsync()
+            CoroutineScope(Dispatchers.Default + SupervisorJob()).launch {
+                try {
+                    PrayerWidgetUpdater.updateAllWidgets(context)
+                } finally {
+                    pendingResult?.finish()
+                }
+            }
+        }
+    }
+}
+
+/**
  * BroadcastReceiver listening for [PrayerWidgetUpdater.ACTION_PRAYER_DATA_CHANGED] to update widgets.
  */
 class PrayerWidgetReceiver : BroadcastReceiver() {

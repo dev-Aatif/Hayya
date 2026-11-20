@@ -1,6 +1,7 @@
 package dev.hayya.core.ui.screens
 
 import android.content.res.Configuration
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -21,8 +22,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
 import androidx.compose.material.icons.outlined.Alarm
-import androidx.compose.material.icons.outlined.BatteryAlert
+import androidx.compose.material.icons.outlined.BatteryChargingFull
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.LocationOn
 import androidx.compose.material3.Button
@@ -30,22 +32,34 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import dev.hayya.core.domain.model.CityPreset
 import dev.hayya.core.domain.model.MadhabOption
+import dev.hayya.core.domain.model.PrayerType
+import dev.hayya.core.ui.components.CityPickerBottomSheet
+import dev.hayya.core.ui.components.PrayerCelestialIcon
+import dev.hayya.core.ui.theme.HayyaSuccess
 import dev.hayya.core.ui.theme.HayyaTheme
-import dev.hayya.core.ui.theme.TabularClockStyle
 
+/**
+ * Simple, friendly 3-step welcome setup for choosing your city, Asr time, and alarm permissions.
+ */
 @Composable
 fun OnboardingScreen(
     locationName: String,
@@ -57,8 +71,14 @@ fun OnboardingScreen(
     onRequestBatteryOptimization: () -> Unit,
     onRequestExactAlarm: () -> Unit,
     onCompleteSetup: () -> Unit,
+    latitude: Double = 21.4225,
+    longitude: Double = 39.8262,
+    onSelectCity: ((CityPreset) -> Unit)? = null,
+    onUpdateCustomCoordinates: ((Double, Double, String) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
+    var showCityPicker by remember { mutableStateOf(false) }
+
     Surface(
         modifier = modifier.fillMaxSize(),
         color = MaterialTheme.colorScheme.background
@@ -67,7 +87,7 @@ fun OnboardingScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .statusBarsPadding()
-                .padding(horizontal = 24.dp)
+                .padding(horizontal = 22.dp)
                 .verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.SpaceBetween
@@ -76,45 +96,67 @@ fun OnboardingScreen(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Spacer(modifier = Modifier.height(28.dp))
+                Spacer(modifier = Modifier.height(26.dp))
+
+                Box(
+                    modifier = Modifier
+                        .size(64.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f))
+                        .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f), CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    PrayerCelestialIcon(
+                        prayerType = PrayerType.FAJR,
+                        size = 34.dp
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
 
                 Text(
-                    text = "HAYYA",
-                    style = TabularClockStyle.copy(
-                        fontSize = 24.sp,
-                        letterSpacing = 6.sp,
+                    text = "Welcome to Hayya",
+                    style = MaterialTheme.typography.headlineMedium.copy(
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary
+                        color = MaterialTheme.colorScheme.onBackground
                     )
                 )
 
                 Spacer(modifier = Modifier.height(6.dp))
 
                 Text(
-                    text = "Offline prayer time precision & reliable alarms",
-                    fontSize = 13.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    text = "Simple, offline prayer times & dependable alarms",
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center
+                    )
                 )
 
-                Spacer(modifier = Modifier.height(36.dp))
+                Spacer(modifier = Modifier.height(28.dp))
 
-                // Card 1: Location Setup
+                // 1. City Selection
                 OnboardingLocationCard(
                     locationName = locationName,
-                    onClick = onRequestLocation
+                    onClick = {
+                        if (onSelectCity != null) {
+                            showCityPicker = true
+                        } else {
+                            onRequestLocation()
+                        }
+                    }
                 )
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(14.dp))
 
-                // Card 2: Asr Madhab Selection
+                // 2. Asr Time Preference
                 OnboardingMadhabCard(
                     selectedMadhab = selectedMadhab,
                     onSelectMadhab = onSelectMadhab
                 )
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(14.dp))
 
-                // Card 3: Permissions (Battery & Exact Alarm)
+                // 3. Alarm Permissions
                 OnboardingPermissionsCard(
                     isBatteryOptimizationGranted = isBatteryOptimizationGranted,
                     isExactAlarmGranted = isExactAlarmGranted,
@@ -123,35 +165,45 @@ fun OnboardingScreen(
                 )
             }
 
-            // Bottom Wide Pill Button: Complete Setup
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 32.dp)
+                    .padding(vertical = 28.dp)
             ) {
                 Button(
                     onClick = onCompleteSetup,
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(54.dp),
-                    shape = RoundedCornerShape(27.dp),
+                    shape = CircleShape,
                     colors = ButtonDefaults.buttonColors(
                         containerColor = MaterialTheme.colorScheme.primary,
                         contentColor = MaterialTheme.colorScheme.onPrimary
                     )
                 ) {
                     Text(
-                        text = "COMPLETE SETUP",
-                        style = TabularClockStyle.copy(
-                            fontSize = 14.sp,
+                        text = "Get Started",
+                        style = MaterialTheme.typography.titleMedium.copy(
                             fontWeight = FontWeight.Bold,
-                            letterSpacing = 2.sp,
                             color = MaterialTheme.colorScheme.onPrimary
                         )
                     )
                 }
             }
         }
+    }
+
+    if (showCityPicker && onSelectCity != null) {
+        CityPickerBottomSheet(
+            currentLocationName = locationName,
+            currentLat = latitude,
+            currentLng = longitude,
+            onSelectCity = onSelectCity,
+            onSelectCustomCoordinates = { lat, lng, name ->
+                onUpdateCustomCoordinates?.invoke(lat, lng, name)
+            },
+            onDismiss = { showCityPicker = false }
+        )
     }
 }
 
@@ -163,9 +215,9 @@ private fun OnboardingLocationCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.20f), RoundedCornerShape(16.dp))
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f), RoundedCornerShape(20.dp))
             .clickable(onClick = onClick),
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
     ) {
         Row(
@@ -176,7 +228,7 @@ private fun OnboardingLocationCard(
         ) {
             Box(
                 modifier = Modifier
-                    .size(38.dp)
+                    .size(44.dp)
                     .clip(CircleShape)
                     .background(MaterialTheme.colorScheme.primaryContainer),
                 contentAlignment = Alignment.Center
@@ -185,7 +237,7 @@ private fun OnboardingLocationCard(
                     imageVector = Icons.Outlined.LocationOn,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(19.dp)
+                    modifier = Modifier.size(22.dp)
                 )
             }
 
@@ -193,26 +245,27 @@ private fun OnboardingLocationCard(
 
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "LOCATION",
-                    style = TabularClockStyle.copy(
-                        fontSize = 10.sp,
+                    text = "1. Your Town (Larkana Division)",
+                    style = MaterialTheme.typography.labelMedium.copy(
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        letterSpacing = 1.2.sp
+                        color = MaterialTheme.colorScheme.primary
                     )
                 )
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
-                    text = locationName.ifEmpty { "Tap to confirm location" },
-                    style = TabularClockStyle.copy(fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface)
+                    text = locationName.ifEmpty { "Tap to pick your town in Larkana Division" },
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
                 )
             }
 
             Icon(
-                imageVector = Icons.Outlined.Check,
-                contentDescription = "Confirmed",
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(18.dp)
+                imageVector = Icons.AutoMirrored.Filled.ArrowForwardIos,
+                contentDescription = "Choose city",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(14.dp)
             )
         }
     }
@@ -226,18 +279,23 @@ private fun OnboardingMadhabCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.20f), RoundedCornerShape(16.dp)),
-        shape = RoundedCornerShape(16.dp),
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f), RoundedCornerShape(20.dp)),
+        shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
     ) {
         Column(modifier = Modifier.padding(18.dp)) {
             Text(
-                text = "ASR JURISTIC SCHOOL",
-                style = TabularClockStyle.copy(
-                    fontSize = 10.sp,
+                text = "2. Afternoon (Asr) Time",
+                style = MaterialTheme.typography.labelMedium.copy(
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    letterSpacing = 1.2.sp
+                    color = MaterialTheme.colorScheme.primary
+                )
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = "Choose what your local mosque follows",
+                style = MaterialTheme.typography.bodySmall.copy(
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             )
 
@@ -245,16 +303,18 @@ private fun OnboardingMadhabCard(
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                MadhabChoicePill(
-                    label = "Standard (1x)",
+                MadhabChoiceTile(
+                    title = "Standard",
+                    subtitle = "Earlier Asr",
                     isSelected = selectedMadhab == MadhabOption.STANDARD,
                     onClick = { onSelectMadhab(MadhabOption.STANDARD) },
                     modifier = Modifier.weight(1f)
                 )
-                MadhabChoicePill(
-                    label = "Hanafi (2x)",
+                MadhabChoiceTile(
+                    title = "Hanafi",
+                    subtitle = "Later Asr",
                     isSelected = selectedMadhab == MadhabOption.HANAFI,
                     onClick = { onSelectMadhab(MadhabOption.HANAFI) },
                     modifier = Modifier.weight(1f)
@@ -265,37 +325,42 @@ private fun OnboardingMadhabCard(
 }
 
 @Composable
-private fun MadhabChoicePill(
-    label: String,
+private fun MadhabChoiceTile(
+    title: String,
+    subtitle: String,
     isSelected: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val background = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.16f) else Color.Transparent
-    val textColor = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-    val borderModifier = if (isSelected) {
-        Modifier.border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f), RoundedCornerShape(10.dp))
-    } else {
-        Modifier.border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f), RoundedCornerShape(10.dp))
-    }
-
-    Box(
+    Surface(
         modifier = modifier
-            .height(40.dp)
-            .clip(RoundedCornerShape(10.dp))
-            .then(borderModifier)
-            .background(background)
+            .clip(RoundedCornerShape(14.dp))
             .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            text = label,
-            style = TabularClockStyle.copy(
-                fontSize = 13.sp,
-                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                color = textColor
-            )
+        shape = RoundedCornerShape(14.dp),
+        color = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.16f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+        border = BorderStroke(
+            1.5.dp,
+            if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
         )
+    ) {
+        Column(
+            modifier = Modifier.padding(vertical = 12.dp, horizontal = 10.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleSmall.copy(
+                    fontWeight = FontWeight.Bold,
+                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                )
+            )
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodySmall.copy(
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            )
+        }
     }
 }
 
@@ -309,27 +374,25 @@ private fun OnboardingPermissionsCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.20f), RoundedCornerShape(16.dp)),
-        shape = RoundedCornerShape(16.dp),
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f), RoundedCornerShape(20.dp)),
+        shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
     ) {
         Column(modifier = Modifier.padding(18.dp)) {
             Text(
-                text = "ALARM RELIABILITY",
-                style = TabularClockStyle.copy(
-                    fontSize = 10.sp,
+                text = "3. Keep Alarms On Time",
+                style = MaterialTheme.typography.labelMedium.copy(
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    letterSpacing = 1.2.sp
+                    color = MaterialTheme.colorScheme.primary
                 )
             )
 
             Spacer(modifier = Modifier.height(14.dp))
 
             PermissionRowItem(
-                icon = Icons.Outlined.BatteryAlert,
-                title = "Ignore Battery Optimizations",
-                subtitle = "Guarantees alarm fires during Doze mode",
+                icon = Icons.Outlined.BatteryChargingFull,
+                title = "Unrestricted Battery",
+                subtitle = if (isBatteryOptimizationGranted) "Ready — won't sleep in background" else "Tap to allow background alarms",
                 isGranted = isBatteryOptimizationGranted,
                 onClick = onRequestBatteryOptimization
             )
@@ -338,8 +401,8 @@ private fun OnboardingPermissionsCard(
 
             PermissionRowItem(
                 icon = Icons.Outlined.Alarm,
-                title = "Exact Alarm Permission",
-                subtitle = "Ensures sub-second notification timing",
+                title = "Exact Alarm Timing",
+                subtitle = if (isExactAlarmGranted) "Ready — rings at the exact minute" else "Tap to allow exact alarm schedule",
                 isGranted = isExactAlarmGranted,
                 onClick = onRequestExactAlarm
             )
@@ -349,7 +412,7 @@ private fun OnboardingPermissionsCard(
 
 @Composable
 private fun PermissionRowItem(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    icon: ImageVector,
     title: String,
     subtitle: String,
     isGranted: Boolean,
@@ -358,7 +421,7 @@ private fun PermissionRowItem(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
+            .clip(RoundedCornerShape(12.dp))
             .clickable(enabled = !isGranted, onClick = onClick)
             .padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -371,8 +434,8 @@ private fun PermissionRowItem(
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = if (isGranted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                modifier = Modifier.size(20.dp)
+                tint = if (isGranted) HayyaSuccess else MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(22.dp)
             )
 
             Spacer(modifier = Modifier.width(12.dp))
@@ -380,29 +443,42 @@ private fun PermissionRowItem(
             Column {
                 Text(
                     text = title,
-                    style = TabularClockStyle.copy(fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface)
+                    style = MaterialTheme.typography.titleSmall.copy(
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
                 )
                 Text(
                     text = subtitle,
-                    fontSize = 11.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 )
             }
         }
 
+        Spacer(modifier = Modifier.width(8.dp))
+
         Box(
             modifier = Modifier
-                .size(24.dp)
+                .size(26.dp)
                 .clip(CircleShape)
-                .background(if (isGranted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant),
+                .background(if (isGranted) HayyaSuccess.copy(alpha = 0.18f) else MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)),
             contentAlignment = Alignment.Center
         ) {
             if (isGranted) {
                 Icon(
                     imageVector = Icons.Outlined.Check,
-                    contentDescription = "Granted",
-                    tint = MaterialTheme.colorScheme.onPrimary,
-                    modifier = Modifier.size(14.dp)
+                    contentDescription = "Allowed",
+                    tint = HayyaSuccess,
+                    modifier = Modifier.size(16.dp)
+                )
+            } else {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowForwardIos,
+                    contentDescription = "Allow",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(12.dp)
                 )
             }
         }

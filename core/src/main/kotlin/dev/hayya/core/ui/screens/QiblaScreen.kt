@@ -4,12 +4,15 @@ import android.content.res.Configuration
 import android.hardware.SensorManager
 import android.os.Build
 import android.view.HapticFeedbackConstants
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -28,13 +31,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowDropUp
 import androidx.compose.material.icons.outlined.Check
-import androidx.compose.material.icons.outlined.Explore
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -54,6 +54,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
@@ -65,23 +66,18 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.hayya.core.domain.qibla.QiblaCalculator
 import dev.hayya.core.system.sensor.QiblaOrientationSensor
+import dev.hayya.core.ui.components.SectionPageHeader
+import dev.hayya.core.ui.theme.HayyaSuccess
 import dev.hayya.core.ui.theme.HayyaTheme
 import dev.hayya.core.ui.theme.TabularClockStyle
+import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.roundToInt
 import kotlin.math.sin
 
 /**
- * Ultra-minimalist Pure OLED Qibla Compass interface.
- *
- * Visual & Behavioral Design:
- * 1. Pitch black OLED background (#000000).
- * 2. 1px geometric gold ring with subtle degree markers and cardinal points.
- * 3. Continuous circular low-pass filtered rotation for smooth, jitter-free orientation.
- * 4. Precise tabular degree read-out (e.g. "118° ESE").
- * 5. Distinct haptic pulse (HapticFeedbackConstants.CONFIRM) triggered when aligned within ±2°.
- * 6. Minimalist geometric Kaaba representation at dead center with golden Kiswah accent.
+ * Clean, luminous Qibla Finder screen with intuitive turn guidance and tactile alignment feedback.
  */
 @Composable
 fun QiblaScreen(
@@ -91,6 +87,7 @@ fun QiblaScreen(
     onBackClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    BackHandler(onBack = onBackClick)
     val context = LocalContext.current
     val view = LocalView.current
 
@@ -98,7 +95,6 @@ fun QiblaScreen(
     var sensorAccuracy by remember { mutableIntStateOf(SensorManager.SENSOR_STATUS_ACCURACY_HIGH) }
     var hasSensors by remember { mutableStateOf(true) }
 
-    // Start/Stop sensor lifecycle safely bound to Composition
     DisposableEffect(context) {
         val sensor = QiblaOrientationSensor(context, smoothingAlpha = 0.22f)
         hasSensors = sensor.hasRequiredSensors()
@@ -114,20 +110,16 @@ fun QiblaScreen(
     val qiblaBearing = remember(latitude, longitude) {
         QiblaCalculator.calculateBearing(latitude, longitude)
     }
-
     val distanceKm = remember(latitude, longitude) {
         QiblaCalculator.calculateDistanceKm(latitude, longitude)
     }
-
     val deviation = remember(filteredAzimuth, qiblaBearing) {
         QiblaCalculator.calculateDeviation(filteredAzimuth.toDouble(), qiblaBearing)
     }
-
     val isAligned = remember(deviation) {
         QiblaCalculator.isAligned(filteredAzimuth.toDouble(), qiblaBearing, toleranceDegrees = 2.0)
     }
 
-    // Trigger haptic pulse (CONFIRM) only once upon crossing into the ±2° alignment zone
     var wasAligned by remember { mutableStateOf(false) }
     var lastHapticTimestamp by remember { mutableLongStateOf(0L) }
 
@@ -145,16 +137,20 @@ fun QiblaScreen(
         wasAligned = isAligned
     }
 
-    // Subtle breathing glow animation when aligned
     val infiniteTransition = rememberInfiniteTransition(label = "aligned_glow")
     val glowAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.15f,
-        targetValue = 0.45f,
+        initialValue = 0.16f,
+        targetValue = 0.42f,
         animationSpec = infiniteRepeatable(
             animation = tween(durationMillis = 1400, easing = LinearEasing),
             repeatMode = RepeatMode.Reverse
         ),
         label = "glow_alpha"
+    )
+
+    val activeAccent by animateColorAsState(
+        targetValue = if (isAligned) HayyaSuccess else MaterialTheme.colorScheme.primary,
+        label = "qibla_accent"
     )
 
     Surface(
@@ -165,130 +161,80 @@ fun QiblaScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .statusBarsPadding()
-                .padding(horizontal = 24.dp),
+                .padding(horizontal = 20.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.SpaceBetween
         ) {
-            // =================================================================
-            // TOP BAR: Navigation, Section Title & Location Coordinates
-            // =================================================================
+            // Top Header & Friendly Guidance Pill
             Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 12.dp)
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    IconButton(
-                        onClick = onBackClick,
-                        modifier = Modifier
-                            .size(40.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.surfaceContainer)
-                            .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f), CircleShape)
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back to Dashboard",
-                            tint = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
+                SectionPageHeader(
+                    title = "Qibla Finder",
+                    subtitle = locationName.substringBefore(","),
+                    onBackClick = onBackClick
+                )
 
-                    // Section Title
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(MaterialTheme.colorScheme.surfaceContainer)
-                            .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f), RoundedCornerShape(16.dp))
-                            .padding(horizontal = 14.dp, vertical = 6.dp)
+                Spacer(modifier = Modifier.height(6.dp))
+
+                // Clear, unmistakable guidance pill
+                val turnDeg = abs(deviation).roundToInt()
+                val guidanceText = when {
+                    !hasSensors -> "Compass sensor unavailable on this device"
+                    isAligned -> "You are facing the Qibla"
+                    deviation > 0 -> "Turn right $turnDeg°"
+                    else -> "Turn left $turnDeg°"
+                }
+
+                Surface(
+                    shape = CircleShape,
+                    color = activeAccent.copy(alpha = 0.14f),
+                    border = BorderStroke(1.dp, activeAccent.copy(alpha = 0.45f))
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
+                        if (isAligned) {
+                            Icon(
+                                imageVector = Icons.Outlined.Check,
+                                contentDescription = null,
+                                tint = activeAccent,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
                         Text(
-                            text = "QIBLA COMPASS",
+                            text = guidanceText,
                             style = TabularClockStyle.copy(
-                                fontSize = 11.sp,
+                                fontSize = 14.sp,
                                 fontWeight = FontWeight.Bold,
-                                letterSpacing = 1.4.sp,
-                                color = MaterialTheme.colorScheme.primary
+                                color = activeAccent
                             )
                         )
                     }
-
-                    Box(
-                        modifier = Modifier
-                            .size(40.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.surfaceContainer)
-                            .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f), CircleShape),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Outlined.Explore,
-                            contentDescription = null,
-                            tint = if (isAligned) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                            modifier = Modifier.size(19.dp)
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(14.dp))
-
-                // Location Subtitle
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text(
-                        text = locationName.uppercase(),
-                        style = TabularClockStyle.copy(
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            letterSpacing = 1.2.sp,
-                            color = MaterialTheme.colorScheme.onSurface
-                        ),
-                        textAlign = TextAlign.Center
-                    )
-
-                    Spacer(modifier = Modifier.height(3.dp))
-
-                    val latFormatted = String.format("%.4f° %s", abs(latitude), if (latitude >= 0) "N" else "S")
-                    val lngFormatted = String.format("%.4f° %s", abs(longitude), if (longitude >= 0) "E" else "W")
-
-                    Text(
-                        text = "$latFormatted · $lngFormatted",
-                        fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        textAlign = TextAlign.Center
-                    )
                 }
             }
 
-            // =================================================================
-            // CENTER: 1px Geometric Gold Ring & Rotating Compass Dial
-            // =================================================================
+            // Center Compass Visual
             val primaryColor = MaterialTheme.colorScheme.primary
-            val outlineColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
+            val outlineColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.40f)
             val onSurfaceColor = MaterialTheme.colorScheme.onSurface
             val onSurfaceVariantColor = MaterialTheme.colorScheme.onSurfaceVariant
 
             Box(
                 contentAlignment = Alignment.Center,
-                modifier = Modifier
-                    .size(290.dp)
-                    .padding(vertical = 12.dp)
+                modifier = Modifier.size(300.dp)
             ) {
-                // Ambient Radial Glow when aligned within ±2°
                 if (isAligned) {
                     Box(
                         modifier = Modifier
-                            .size(270.dp)
+                            .size(286.dp)
                             .background(
                                 Brush.radialGradient(
                                     colors = listOf(
-                                        primaryColor.copy(alpha = glowAlpha),
+                                        activeAccent.copy(alpha = glowAlpha),
                                         Color.Transparent
                                     )
                                 ),
@@ -297,351 +243,259 @@ fun QiblaScreen(
                     )
                 }
 
-                // 1px Geometric Gold Ring with Compass Ticks
+                // Rotating Compass Dial
                 Canvas(
                     modifier = Modifier
-                        .size(270.dp)
+                        .size(274.dp)
                         .graphicsLayer {
-                            // Smooth filtered rotation counter-clockwise with device heading
                             rotationZ = -filteredAzimuth
                         }
                 ) {
                     val centerOffset = this.center
                     val radius = size.minDimension / 2f
                     val stroke1px = 1.dp.toPx()
-                    val majorTickLength = 10.dp.toPx()
-                    val minorTickLength = 5.dp.toPx()
+                    val majorTickLength = 12.dp.toPx()
+                    val minorTickLength = 6.dp.toPx()
 
-                    // Outer 1px geometric boundary ring
+                    // Outer dial ring
                     drawCircle(
-                        color = if (isAligned) primaryColor else outlineColor,
+                        color = if (isAligned) activeAccent else outlineColor,
                         radius = radius - stroke1px,
-                        style = Stroke(width = if (isAligned) 1.5.dp.toPx() else 1.dp.toPx())
+                        style = Stroke(width = if (isAligned) 2.dp.toPx() else 1.2.dp.toPx())
                     )
 
-                    // Degree tick marks (every 5° minor, every 30° major)
+                    // Inner subtle guide ring
+                    drawCircle(
+                        color = outlineColor.copy(alpha = 0.25f),
+                        radius = radius * 0.68f,
+                        style = Stroke(width = 1.dp.toPx())
+                    )
+
+                    // Degree ticks
                     for (deg in 0 until 360 step 5) {
                         val isMajor = deg % 30 == 0
                         val isCardinal = deg % 90 == 0
                         val tickLength = if (isMajor) majorTickLength else minorTickLength
-
                         val tickColor = when {
-                            deg == 0 -> primaryColor // North is accent gold
+                            deg == 0 -> primaryColor
                             isCardinal -> onSurfaceColor
                             isMajor -> onSurfaceVariantColor.copy(alpha = 0.7f)
                             else -> outlineColor.copy(alpha = 0.45f)
                         }
-
                         val angleRad = Math.toRadians((deg - 90).toDouble())
                         val cosVal = cos(angleRad).toFloat()
                         val sinVal = sin(angleRad).toFloat()
 
-                        val startX = centerOffset.x + (radius - stroke1px - tickLength) * cosVal
-                        val startY = centerOffset.y + (radius - stroke1px - tickLength) * sinVal
-                        val endX = centerOffset.x + (radius - stroke1px) * cosVal
-                        val endY = centerOffset.y + (radius - stroke1px) * sinVal
-
                         drawLine(
                             color = tickColor,
-                            start = Offset(startX, startY),
-                            end = Offset(endX, endY),
-                            strokeWidth = if (isCardinal) 1.5.dp.toPx() else 1.dp.toPx()
+                            start = Offset(
+                                centerOffset.x + (radius - stroke1px - tickLength) * cosVal,
+                                centerOffset.y + (radius - stroke1px - tickLength) * sinVal
+                            ),
+                            end = Offset(
+                                centerOffset.x + (radius - stroke1px) * cosVal,
+                                centerOffset.y + (radius - stroke1px) * sinVal
+                            ),
+                            strokeWidth = if (isCardinal) 2.dp.toPx() else 1.dp.toPx(),
+                            cap = StrokeCap.Round
                         )
                     }
 
-                    // Kaaba Destination Pin plotted at exact great-circle bearing on the dial
-                    val qiblaRad = Math.toRadians((qiblaBearing - 90.0))
+                    // Pointer Line from center toward Kaaba bearing
+                    val qiblaRad = Math.toRadians(qiblaBearing - 90.0)
                     val markerRadius = radius - stroke1px - majorTickLength - 8.dp.toPx()
-                    val markerX = centerOffset.x + markerRadius * cos(qiblaRad).toFloat()
-                    val markerY = centerOffset.y + markerRadius * sin(qiblaRad).toFloat()
+                    val markerEnd = Offset(
+                        centerOffset.x + markerRadius * cos(qiblaRad).toFloat(),
+                        centerOffset.y + markerRadius * sin(qiblaRad).toFloat()
+                    )
+
+                    drawLine(
+                        color = activeAccent.copy(alpha = 0.55f),
+                        start = centerOffset,
+                        end = markerEnd,
+                        strokeWidth = 3.dp.toPx(),
+                        cap = StrokeCap.Round
+                    )
 
                     drawCircle(
-                        color = primaryColor,
-                        radius = 5.dp.toPx(),
-                        center = Offset(markerX, markerY)
+                        color = activeAccent,
+                        radius = 7.dp.toPx(),
+                        center = markerEnd
                     )
                 }
 
-                // Rotating Cardinal Labels (N, E, S, W)
+                // Rotating N/E/S/W & Kaaba Marker
                 Box(
                     modifier = Modifier
-                        .size(270.dp)
-                        .graphicsLayer {
-                            rotationZ = -filteredAzimuth
-                        }
+                        .size(274.dp)
+                        .graphicsLayer { rotationZ = -filteredAzimuth }
                 ) {
-                    // North (0°)
                     Text(
                         text = "N",
                         style = TabularClockStyle.copy(
-                            fontSize = 12.sp,
+                            fontSize = 13.sp,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.primary
                         ),
                         modifier = Modifier
                             .align(Alignment.TopCenter)
-                            .padding(top = 15.dp)
+                            .padding(top = 18.dp)
                     )
-
-                    // East (90°)
                     Text(
                         text = "E",
-                        style = TabularClockStyle.copy(
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        ),
+                        style = TabularClockStyle.copy(fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant),
                         modifier = Modifier
                             .align(Alignment.CenterEnd)
-                            .padding(end = 15.dp)
+                            .padding(end = 18.dp)
                     )
-
-                    // South (180°)
                     Text(
                         text = "S",
-                        style = TabularClockStyle.copy(
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        ),
+                        style = TabularClockStyle.copy(fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant),
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
-                            .padding(bottom = 15.dp)
+                            .padding(bottom = 18.dp)
                     )
-
-                    // West (270°)
                     Text(
                         text = "W",
-                        style = TabularClockStyle.copy(
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        ),
+                        style = TabularClockStyle.copy(fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant),
                         modifier = Modifier
                             .align(Alignment.CenterStart)
-                            .padding(start = 15.dp)
+                            .padding(start = 18.dp)
                     )
 
-                    // Kaaba Target Flag marker on the rotating dial
+                    // Kaaba Label on Dial
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .graphicsLayer {
-                                rotationZ = qiblaBearing.toFloat()
-                            }
+                            .graphicsLayer { rotationZ = qiblaBearing.toFloat() }
                     ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
+                        Text(
+                            text = "KAABA",
+                            style = TabularClockStyle.copy(
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 1.sp,
+                                color = activeAccent
+                            ),
                             modifier = Modifier
                                 .align(Alignment.TopCenter)
-                                .padding(top = 34.dp)
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(7.dp)
-                                    .clip(CircleShape)
-                                    .background(MaterialTheme.colorScheme.primary)
-                            )
-                            Text(
-                                text = "KAABA",
-                                style = TabularClockStyle.copy(
-                                    fontSize = 9.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    letterSpacing = 1.sp,
-                                    color = MaterialTheme.colorScheme.primary
-                                ),
-                                modifier = Modifier.padding(top = 2.dp)
-                            )
-                        }
+                                .padding(top = 42.dp)
+                        )
                     }
                 }
 
-                // Fixed Top Forward Arrow (indicates phone's forward pointing axis at 12 o'clock)
+                // Fixed Top Forward Pointer
                 Icon(
                     imageVector = Icons.Filled.ArrowDropUp,
-                    contentDescription = "Forward Direction",
-                    tint = if (isAligned) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    contentDescription = "Phone forward direction",
+                    tint = activeAccent,
                     modifier = Modifier
-                        .size(28.dp)
+                        .size(34.dp)
                         .align(Alignment.TopCenter)
-                        .graphicsLayer { translationY = (-14).dp.toPx() }
+                        .graphicsLayer { translationY = (-10).dp.toPx() }
                 )
 
-                // Dead Center Minimalist Geometric Kaaba Icon
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
+                // Center Minimalist Kaaba Cube
+                Box(
+                    modifier = Modifier
+                        .size(52.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(MaterialTheme.colorScheme.surfaceContainer)
+                        .border(
+                            width = if (isAligned) 2.dp else 1.2.dp,
+                            color = if (isAligned) activeAccent else MaterialTheme.colorScheme.outlineVariant,
+                            shape = RoundedCornerShape(8.dp)
+                        ),
+                    contentAlignment = Alignment.TopCenter
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(46.dp)
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(MaterialTheme.colorScheme.surfaceContainer)
-                            .border(
-                                width = if (isAligned) 1.5.dp else 1.dp,
-                                color = if (isAligned) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f),
-                                shape = RoundedCornerShape(4.dp)
-                            ),
-                        contentAlignment = Alignment.TopCenter
-                    ) {
-                        // Golden Kiswah belt band across upper third of the Kaaba cube
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(3.dp)
-                                .padding(top = 10.dp)
-                                .background(MaterialTheme.colorScheme.primary)
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    // Alignment Pill / Turn Guidance
-                    if (isAligned) {
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f))
-                                .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
-                                .padding(horizontal = 10.dp, vertical = 3.dp)
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    imageVector = Icons.Outlined.Check,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(12.dp)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = "ALIGNED",
-                                    style = TabularClockStyle.copy(
-                                        fontSize = 10.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        letterSpacing = 1.sp,
-                                        color = MaterialTheme.colorScheme.primary
-                                    )
-                                )
-                            }
-                        }
-                    } else {
-                        val turnDeg = abs(deviation).roundToInt()
-                        val turnDir = if (deviation > 0) "TURN RIGHT" else "TURN LEFT"
-                        Text(
-                            text = "$turnDir ${turnDeg}°",
-                            style = TabularClockStyle.copy(
-                                fontSize = 10.sp,
-                                letterSpacing = 0.8.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f)
-                            )
-                        )
-                    }
+                            .padding(top = 12.dp)
+                            .fillMaxWidth()
+                            .height(4.dp)
+                            .background(activeAccent)
+                    )
                 }
             }
 
-            // =================================================================
-            // BOTTOM SECTION: Large Degree Read-out & Compass Metadata
-            // =================================================================
+            // Bottom Simple Facts Card
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(bottom = 28.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // Precise Degree Read-out (e.g. "118° ESE")
                 val bearingFormatted = QiblaCalculator.formatBearingReadout(qiblaBearing)
                 Text(
                     text = bearingFormatted,
                     style = TabularClockStyle.copy(
-                        fontSize = 46.sp,
+                        fontSize = 42.sp,
                         fontWeight = FontWeight.Bold,
-                        letterSpacing = (-1).sp,
-                        color = if (isAligned) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                        color = if (isAligned) activeAccent else MaterialTheme.colorScheme.onSurface
                     )
                 )
 
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(14.dp))
 
-                Text(
-                    text = if (isAligned) {
-                        "Accurately aligned within ±2° of Kaaba"
-                    } else {
-                        "Spherical great-circle azimuth to Kaaba"
-                    },
-                    fontSize = 12.sp,
-                    color = if (isAligned) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center
-                )
-
-                Spacer(modifier = Modifier.height(18.dp))
-
-                // Card with Great-Circle Geodetic Telemetry
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(MaterialTheme.colorScheme.surfaceContainer)
-                        .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f), RoundedCornerShape(14.dp))
-                        .padding(horizontal = 16.dp, vertical = 12.dp)
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(18.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainer,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
                 ) {
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 20.dp, vertical = 14.dp),
+                        horizontalArrangement = Arrangement.SpaceAround,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(
-                                text = "BEARING",
-                                style = TabularClockStyle.copy(fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, letterSpacing = 1.sp)
+                                text = "Qibla Angle",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
                             )
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
-                                text = String.format("%.1f°", qiblaBearing),
-                                style = TabularClockStyle.copy(fontSize = 14.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                                text = String.format(Locale.US, "%.1f°", qiblaBearing),
+                                style = TabularClockStyle.copy(
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
                             )
                         }
 
-                        Box(modifier = Modifier.width(1.dp).height(24.dp).background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)))
+                        Box(
+                            modifier = Modifier
+                                .width(1.dp)
+                                .height(28.dp)
+                                .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
+                        )
 
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(
-                                text = "HEADING",
-                                style = TabularClockStyle.copy(fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, letterSpacing = 1.sp)
+                                text = "To Makkah",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
                             )
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
-                                text = String.format("%.1f°", filteredAzimuth),
-                                style = TabularClockStyle.copy(fontSize = 14.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-                            )
-                        }
-
-                        Box(modifier = Modifier.width(1.dp).height(24.dp).background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)))
-
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(
-                                text = "DISTANCE",
-                                style = TabularClockStyle.copy(fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, letterSpacing = 1.sp)
-                            )
-                            Spacer(modifier = Modifier.height(2.dp))
-                            val distFormatted = String.format("%,d km", distanceKm.roundToInt())
-                            Text(
-                                text = distFormatted,
-                                style = TabularClockStyle.copy(fontSize = 14.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                                text = String.format(Locale.US, "%,d km", distanceKm.roundToInt()),
+                                style = TabularClockStyle.copy(
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
                             )
                         }
                     }
                 }
 
-                // Sensor calibration notice if accuracy is low or hardware sensors absent
-                if (!hasSensors) {
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Text(
-                        text = "Device magnetometer unavailable. Calculated Qibla bearing is exact, but real-time orientation tracking is disabled.",
-                        fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                        textAlign = TextAlign.Center
-                    )
-                } else if (sensorAccuracy == SensorManager.SENSOR_STATUS_UNRELIABLE || sensorAccuracy == SensorManager.SENSOR_STATUS_ACCURACY_LOW) {
+                if (hasSensors && (sensorAccuracy == SensorManager.SENSOR_STATUS_UNRELIABLE || sensorAccuracy == SensorManager.SENSOR_STATUS_ACCURACY_LOW)) {
                     Spacer(modifier = Modifier.height(10.dp))
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -650,14 +504,16 @@ fun QiblaScreen(
                         Icon(
                             imageVector = Icons.Outlined.Refresh,
                             contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                            modifier = Modifier.size(13.dp)
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(14.dp)
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = "Tilt device in a figure-8 motion to calibrate compass sensor",
-                            fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                            text = "Move your phone in a figure-8 to improve accuracy",
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            ),
+                            textAlign = TextAlign.Center
                         )
                     }
                 }
@@ -666,7 +522,7 @@ fun QiblaScreen(
     }
 }
 
-@Preview(name = "Qibla Screen OLED Dark", showBackground = true, uiMode = Configuration.UI_MODE_NIGHT_YES)
+@Preview(name = "Qibla Screen Dark", showBackground = true, uiMode = Configuration.UI_MODE_NIGHT_YES)
 @Composable
 private fun QiblaScreenPreview() {
     HayyaTheme {

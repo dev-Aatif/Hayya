@@ -3,6 +3,7 @@ package dev.hayya.core.domain.model
 import com.batoulapps.adhan.CalculationMethod
 import com.batoulapps.adhan.HighLatitudeRule
 import com.batoulapps.adhan.Madhab
+import dev.hayya.core.domain.tasbih.TasbihTargetMode
 
 /**
  * Geographic coordinates with optional altitude and resolved location name.
@@ -301,9 +302,9 @@ enum class ThemeModeOption(val displayName: String, val subtitle: String) {
  * Complete immutable snapshot of user preferences for offline calculation and scheduling.
  */
 data class UserPreferences(
-    val location: GeoLocation = GeoLocation(21.4225, 39.8262, 0.0, "Makkah, Saudi Arabia"),
-    val calculationMethod: CalculationMethodOption = CalculationMethodOption.MUSLIM_WORLD_LEAGUE,
-    val madhab: MadhabOption = MadhabOption.STANDARD,
+    val location: GeoLocation = GeoLocation(27.5590, 68.2120, 0.0, "Larkana, Pakistan"),
+    val calculationMethod: CalculationMethodOption = CalculationMethodOption.KARACHI,
+    val madhab: MadhabOption = MadhabOption.HANAFI,
     val highLatitudeRule: HighLatitudeRuleOption = HighLatitudeRuleOption.MIDDLE_OF_THE_NIGHT,
     val ishaExpiresAtMidnight: Boolean = false,
     val manualMinuteOffsets: Map<PrayerType, Int> = PrayerType.entries.associateWith { 0 },
@@ -323,7 +324,11 @@ data class UserPreferences(
     val dynamicColorEnabled: Boolean = false,
     val volumeEscalation: VolumeEscalationOption = VolumeEscalationOption.SECONDS_20,
     val tahajjudAlarmEnabled: Boolean = false,
-    val tahajjudAlarmMinutesOffset: Int = 0
+    val tahajjudAlarmMinutesOffset: Int = 0,
+    val hasCompletedOnboarding: Boolean = true,
+    val tasbihCount: Int = 0,
+    val tasbihMode: TasbihTargetMode = TasbihTargetMode.FATIMA_100,
+    val salawatCount: Int = 0
 ) {
     fun getOffset(prayer: PrayerType): Int = manualMinuteOffsets[prayer] ?: 0
 

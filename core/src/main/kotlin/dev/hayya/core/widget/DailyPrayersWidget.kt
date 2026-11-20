@@ -1,9 +1,7 @@
 package dev.hayya.core.widget
 
 import android.content.Context
-import android.content.Intent
 import android.util.Log
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.glance.GlanceId
@@ -12,6 +10,7 @@ import androidx.glance.action.ActionParameters
 import androidx.glance.action.actionParametersOf
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
+import androidx.glance.appwidget.LinearProgressIndicator
 import androidx.glance.appwidget.SizeMode
 import androidx.glance.appwidget.action.ActionCallback
 import androidx.glance.appwidget.action.actionRunCallback
@@ -32,19 +31,16 @@ import androidx.glance.layout.size
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
-import androidx.glance.unit.ColorProvider
 import dev.hayya.core.data.prayerlog.PrayerLogRepository
 import dev.hayya.core.domain.model.PrayerType
 import dev.hayya.core.domain.prayerlog.OBLIGATORY_PRAYERS
 import dev.hayya.core.system.receivers.PreferenceDataStoreProvider
-import dev.hayya.core.ui.MainActivity
 import kotlinx.datetime.Clock
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 
 /**
- * ActionCallback triggered when a prayer indicator button is clicked directly on the widget.
- * Toggles prayer completion state in [PrayerLogRepository] and updates all widgets.
+ * ActionCallback triggered when a prayer check button is tapped directly on a widget.
  */
 class TogglePrayerActionCallback : ActionCallback {
     override suspend fun onAction(
@@ -61,8 +57,6 @@ class TogglePrayerActionCallback : ActionCallback {
             val today = Clock.System.now().toLocalDateTime(timeZone).date
             repo.togglePrayer(today, prayer)
 
-            // Instantly update the clicked widget instance followed by all other widgets
-            DailyPrayersWidget().update(context, glanceId)
             PrayerWidgetUpdater.updateAllWidgets(context)
         } catch (e: Exception) {
             Log.e("TogglePrayerAction", "Failed to toggle prayer completion from widget", e)
@@ -75,8 +69,8 @@ class TogglePrayerActionCallback : ActionCallback {
 }
 
 /**
- * Interactive 3x2 / 4x2 Home Screen AppWidget dedicated to tracking daily prayer completion and scheduled times.
- * Supports direct in-widget interactive logging where tapping any prayer pip immediately toggles its completion.
+ * Interactive 4x2 / 3x2 Daily Prayers & Habit Tracker Widget.
+ * Tap any prayer circle to check it off right from your home screen.
  */
 class DailyPrayersWidget : GlanceAppWidget() {
 
@@ -84,77 +78,82 @@ class DailyPrayersWidget : GlanceAppWidget() {
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val snapshot = PrayerWidgetUpdater.loadCurrentSnapshot(context)
+        val palette = WidgetTheme.paletteFor(snapshot.themeMode)
 
         provideContent {
-            // Container with 1px border (#1F2328) and 24dp corner radii
             Box(
                 modifier = GlanceModifier
                     .fillMaxSize()
                     .cornerRadius(24.dp)
-                    .background(ColorProvider(Color(0xFF1F2328)))
+                    .background(palette.border)
                     .padding(1.dp)
             ) {
                 Box(
                     modifier = GlanceModifier
                         .fillMaxSize()
                         .cornerRadius(23.dp)
-                        .background(ColorProvider(Color(0xFF121417)))
+                        .background(palette.surface)
                         .padding(horizontal = 14.dp, vertical = 12.dp)
                 ) {
                     Column(
                         modifier = GlanceModifier.fillMaxSize(),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // Header Row: Title & Completion Count (Tapping opens MainActivity)
+                        // Header Row (tapping opens Prayer Habits page)
                         Row(
                             modifier = GlanceModifier
                                 .fillMaxWidth()
-                                .clickable(actionStartActivity(Intent(context, MainActivity::class.java))),
+                                .clickable(
+                                    actionStartActivity(
+                                        WidgetTheme.launchIntent(context, PrayerWidgetUpdater.DEST_TRACKER)
+                                    )
+                                ),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = "DAILY PRAYERS",
+                                text = "Today's Prayers",
                                 style = TextStyle(
-                                    color = ColorProvider(Color(0xFF767E8B)),
-                                    fontSize = 11.sp,
+                                    color = palette.textPrimary,
+                                    fontSize = 13.sp,
                                     fontWeight = FontWeight.Bold
                                 )
                             )
 
                             Spacer(modifier = GlanceModifier.defaultWeight())
 
-                            Text(
-                                text = "${snapshot.completedCount} OF 5 COMPLETED",
-                                style = TextStyle(
-                                    color = ColorProvider(Color(0xFFE5C378)),
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold
+                            Box(
+                                modifier = GlanceModifier
+                                    .cornerRadius(10.dp)
+                                    .background(palette.activeRowBg)
+                                    .padding(horizontal = 8.dp, vertical = 3.dp)
+                            ) {
+                                Text(
+                                    text = "${snapshot.completedCount}/5 prayed",
+                                    style = TextStyle(
+                                        color = palette.accent,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
                                 )
-                            )
+                            }
                         }
 
                         Spacer(modifier = GlanceModifier.height(10.dp))
 
-                        // 5 Interactive Prayer Indicator Buttons Row
+                        // 5 Interactive Prayer Columns
+                        val compactMap = snapshot.compactDailyTimes.toMap()
+                        val fullMap = snapshot.dailyTimes.toMap()
+
                         Row(
                             modifier = GlanceModifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            val timeMap = snapshot.dailyTimes.toMap()
-
                             OBLIGATORY_PRAYERS.forEach { prayer ->
                                 val isDone = snapshot.completedPrayers.contains(prayer)
-                                val isNext = snapshot.nextPrayerName == prayer.displayName(snapshot.isFriday)
-                                val timeStr = timeMap[prayer] ?: "--:--"
-
-                                val initial = when (prayer) {
-                                    PrayerType.FAJR -> "F"
-                                    PrayerType.DHUHR -> if (snapshot.isFriday) "J" else "D"
-                                    PrayerType.ASR -> "A"
-                                    PrayerType.MAGHRIB -> "M"
-                                    PrayerType.ISHA -> "I"
-                                    else -> prayer.name.take(1)
-                                }
+                                val isNext = snapshot.nextPrayerType == prayer
+                                val timeStr = compactMap[prayer] ?: fullMap[prayer] ?: "--:--"
+                                val initial = WidgetTheme.compactInitial(prayer, snapshot.isFriday)
+                                val label = WidgetTheme.shortPrayerLabel(prayer, snapshot.isFriday)
 
                                 Column(
                                     modifier = GlanceModifier
@@ -166,59 +165,54 @@ class DailyPrayersWidget : GlanceAppWidget() {
                                                 )
                                             )
                                         )
-                                        .padding(vertical = 4.dp),
+                                        .padding(vertical = 2.dp),
                                     horizontalAlignment = Alignment.CenterHorizontally
                                 ) {
-                                    // Circular Indicator Pip / Button
                                     Box(
                                         modifier = GlanceModifier
-                                            .size(32.dp)
-                                            .cornerRadius(16.dp)
+                                            .size(34.dp)
+                                            .cornerRadius(17.dp)
                                             .background(
-                                                ColorProvider(
-                                                    if (isDone) Color(0xFFE5C378)
-                                                    else if (isNext) Color(0xFF2B281D)
-                                                    else Color(0xFF1B1D21)
-                                                )
+                                                when {
+                                                    isDone -> palette.accent
+                                                    isNext -> palette.activeRowBg
+                                                    else -> palette.surfaceElevated
+                                                }
                                             ),
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Text(
                                             text = if (isDone) "✓" else initial,
                                             style = TextStyle(
-                                                color = ColorProvider(
-                                                    if (isDone) Color(0xFF121417)
-                                                    else if (isNext) Color(0xFFE5C378)
-                                                    else Color(0xFF8B949E)
-                                                ),
-                                                fontSize = if (isDone) 14.sp else 12.sp,
+                                                color = when {
+                                                    isDone -> palette.onAccent
+                                                    isNext -> palette.accent
+                                                    else -> palette.textSecondary
+                                                },
+                                                fontSize = if (isDone) 15.sp else 13.sp,
                                                 fontWeight = FontWeight.Bold
                                             )
                                         )
                                     }
 
-                                    Spacer(modifier = GlanceModifier.height(4.dp))
+                                    Spacer(modifier = GlanceModifier.height(5.dp))
 
-                                    // Prayer Label
                                     Text(
-                                        text = prayer.name.take(3),
+                                        text = label,
+                                        maxLines = 1,
                                         style = TextStyle(
-                                            color = ColorProvider(
-                                                if (isDone || isNext) Color(0xFFE5C378)
-                                                else Color(0xFFEDEDED)
-                                            ),
-                                            fontSize = 9.sp,
+                                            color = if (isDone || isNext) palette.accent else palette.textPrimary,
+                                            fontSize = 10.sp,
                                             fontWeight = if (isNext || isDone) FontWeight.Bold else FontWeight.Medium
                                         )
                                     )
 
-                                    // Time
                                     Text(
                                         text = timeStr,
+                                        maxLines = 1,
                                         style = TextStyle(
-                                            color = ColorProvider(Color(0xFF8B949E)),
-                                            fontSize = 8.sp,
-                                            fontWeight = FontWeight.Normal
+                                            color = palette.textSecondary,
+                                            fontSize = 10.sp
                                         )
                                     )
                                 }
@@ -227,30 +221,42 @@ class DailyPrayersWidget : GlanceAppWidget() {
 
                         Spacer(modifier = GlanceModifier.height(8.dp))
 
-                        // Footer: Next Prayer Countdown & Location (Tapping opens MainActivity)
+                        LinearProgressIndicator(
+                            progress = (snapshot.completedCount / 5f).coerceIn(0f, 1f),
+                            modifier = GlanceModifier
+                                .fillMaxWidth()
+                                .height(3.dp)
+                                .cornerRadius(2.dp),
+                            color = palette.accent,
+                            backgroundColor = palette.trackBg
+                        )
+
+                        Spacer(modifier = GlanceModifier.height(6.dp))
+
+                        // Footer
                         Row(
                             modifier = GlanceModifier
                                 .fillMaxWidth()
-                                .clickable(actionStartActivity(Intent(context, MainActivity::class.java))),
+                                .clickable(actionStartActivity(WidgetTheme.launchIntent(context))),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = "Next: ${snapshot.nextPrayerName} ${snapshot.countdownFormatted}",
+                                text = "Next: ${snapshot.nextPrayerName} • ${snapshot.nextPrayerTimeFormatted}",
+                                maxLines = 1,
                                 style = TextStyle(
-                                    color = ColorProvider(Color(0xFFE5C378)),
-                                    fontSize = 10.sp,
+                                    color = palette.accent,
+                                    fontSize = 11.sp,
                                     fontWeight = FontWeight.Medium
-                                )
+                                ),
+                                modifier = GlanceModifier.defaultWeight()
                             )
 
-                            Spacer(modifier = GlanceModifier.defaultWeight())
-
                             Text(
-                                text = snapshot.locationName.uppercase(),
+                                text = snapshot.locationName,
+                                maxLines = 1,
                                 style = TextStyle(
-                                    color = ColorProvider(Color(0xFF484F58)),
-                                    fontSize = 9.sp,
-                                    fontWeight = FontWeight.Normal
+                                    color = palette.textMuted,
+                                    fontSize = 10.sp
                                 )
                             )
                         }

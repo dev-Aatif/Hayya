@@ -8,14 +8,17 @@ import android.os.Vibrator
 import android.os.VibratorManager
 import android.view.HapticFeedbackConstants
 import android.view.View
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -75,19 +78,8 @@ import dev.hayya.core.ui.theme.TabularClockStyle
 import kotlinx.coroutines.launch
 
 /**
- * Pure OLED Pitch Black (`#000000`) background color for true pixel deactivation.
- */
-private val PitchBlackOled = Color(0xFF000000)
-
-/**
- * Full-screen minimalist OLED dark Tasbih / Dhikr counter where the entire screen
- * acts as an unmissable tactile touch target.
- *
- * Requirements satisfied:
- * 1. Full-screen touch target: Any tap across the canvas registers an instant increment.
- * 2. Instant haptic click: Uses system [HapticFeedbackConstants.CLOCK_TICK] on every tap.
- * 3. Distinct vibration pulse at 33, 66, and 99/100 intervals via waveform vibration.
- * 4. Preserves dark luxury typography with tabular figures and authentic Sunnah Dhikr phases.
+ * Full-screen tactile OLED Tasbih / Dhikr counter.
+ * Tap anywhere on the screen to count, with gentle haptics and milestone pulses.
  */
 @Composable
 fun TasbihScreen(
@@ -99,45 +91,43 @@ fun TasbihScreen(
     onBackClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    BackHandler(onBack = onBackClick)
     val context = LocalContext.current
     val view = LocalView.current
     val scope = rememberCoroutineScope()
 
     var showResetDialog by remember { mutableStateOf(false) }
-
-    // Tap pulse animation scale
     val tapScale = remember { Animatable(1f) }
 
-    // Pulsing aura for "Tap anywhere" prompt
     val infiniteTransition = rememberInfiniteTransition(label = "PromptAura")
     val promptAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.35f,
-        targetValue = 0.75f,
+        initialValue = 0.40f,
+        targetValue = 0.85f,
         animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 2000, easing = LinearEasing),
+            animation = tween(durationMillis = 1800, easing = LinearEasing),
             repeatMode = RepeatMode.Reverse
         ),
         label = "PromptPulse"
     )
 
-    // Current phase information based on count & mode
     val currentPhase: DhikrPhase = remember(count, targetMode) {
         TasbihMilestoneHelper.getPhaseForCount(count, targetMode)
     }
-
-    val progressFraction: Float = remember(count, targetMode) {
+    val rawProgress: Float = remember(count, targetMode) {
         TasbihMilestoneHelper.calculateProgress(count, targetMode)
     }
-
+    val animatedProgress by animateFloatAsState(
+        targetValue = rawProgress,
+        animationSpec = tween(durationMillis = 220),
+        label = "tasbih_ring"
+    )
     val lapNumber: Int = remember(count, targetMode) {
         TasbihMilestoneHelper.calculateLap(count, targetMode)
     }
-
     val nextMilestone: Int = remember(count, targetMode) {
         TasbihMilestoneHelper.getNextMilestone(count, targetMode)
     }
 
-    // Handles tap events: triggers instant CLOCK_TICK, checks milestone for heavy pulse, increments
     val handleTap = {
         val nextCount = count + 1
         if (TasbihMilestoneHelper.isMilestone(nextCount, targetMode)) {
@@ -147,10 +137,9 @@ fun TasbihScreen(
         }
 
         scope.launch {
-            tapScale.animateTo(0.96f, animationSpec = tween(durationMillis = 40))
-            tapScale.animateTo(1f, animationSpec = tween(durationMillis = 120, easing = FastOutSlowInEasing))
+            tapScale.animateTo(0.95f, animationSpec = tween(durationMillis = 45))
+            tapScale.animateTo(1f, animationSpec = tween(durationMillis = 130, easing = FastOutSlowInEasing))
         }
-
         onIncrement()
     }
 
@@ -158,9 +147,7 @@ fun TasbihScreen(
         modifier = modifier
             .fillMaxSize()
             .pointerInput(targetMode, count) {
-                detectTapGestures(
-                    onTap = { handleTap() }
-                )
+                detectTapGestures(onTap = { handleTap() })
             },
         color = MaterialTheme.colorScheme.background
     ) {
@@ -168,116 +155,100 @@ fun TasbihScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .statusBarsPadding()
-                .padding(horizontal = 20.dp, vertical = 12.dp),
+                .padding(horizontal = 20.dp, vertical = 14.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.SpaceBetween
         ) {
-            // =================================================================
-            // TOP BAR: Back Navigation, Lap Badge, and Controls
-            // =================================================================
+            // Top Bar: Back, Lap Pill, Reset
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 4.dp),
+                modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(
                     onClick = onBackClick,
                     modifier = Modifier
-                        .size(40.dp)
+                        .size(42.dp)
                         .clip(CircleShape)
                         .background(MaterialTheme.colorScheme.surfaceContainer)
-                        .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.20f), CircleShape)
+                        .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.40f), CircleShape)
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Back to Dashboard",
+                        contentDescription = "Back",
                         tint = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.size(20.dp)
                     )
                 }
 
-                // Lap / Cycle Badge
-                Box(
-                    modifier = Modifier
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.surfaceContainer)
-                        .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.20f), CircleShape)
-                        .padding(horizontal = 14.dp, vertical = 6.dp)
+                Surface(
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.surfaceContainer,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
                 ) {
                     Text(
                         text = if (targetMode == TasbihTargetMode.FREE) {
-                            "FREE COUNT"
+                            "Free Count"
                         } else {
-                            "LAP $lapNumber · NEXT: $nextMilestone"
+                            "Lap $lapNumber • Goal $nextMilestone"
                         },
                         style = TabularClockStyle.copy(
-                            fontSize = 11.sp,
+                            fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
-                            letterSpacing = 1.2.sp,
                             color = MaterialTheme.colorScheme.primary
-                        )
+                        ),
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp)
                     )
                 }
 
-                // Reset Button
                 IconButton(
                     onClick = {
-                        if (count > 0) {
-                            showResetDialog = true
-                        }
+                        if (count > 0) showResetDialog = true
                     },
                     modifier = Modifier
-                        .size(40.dp)
+                        .size(42.dp)
                         .clip(CircleShape)
                         .background(MaterialTheme.colorScheme.surfaceContainer)
-                        .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.20f), CircleShape)
+                        .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.40f), CircleShape)
                 ) {
                     Icon(
                         imageVector = Icons.Outlined.Refresh,
                         contentDescription = "Reset Counter",
-                        tint = if (count > 0) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                        modifier = Modifier.size(19.dp)
+                        tint = if (count > 0) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                        modifier = Modifier.size(20.dp)
                     )
                 }
             }
 
-            // =================================================================
-            // CENTER HERO: Dhikr Phase, Massive Tabular Count & Progress Ring
-            // =================================================================
+            // Center Hero: Dhikr Phase & Big Tactile Ring
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier
                     .fillMaxWidth()
                     .scale(tapScale.value)
             ) {
-                // Phase Pill (SubhanAllah / Alhamdulillah / Allahu Akbar / Seal)
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(20.dp))
-                        .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f))
-                        .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f), RoundedCornerShape(20.dp))
-                        .padding(horizontal = 16.dp, vertical = 6.dp)
+                Surface(
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f))
                 ) {
                     Text(
-                        text = currentPhase.targetRangeLabel.uppercase(),
+                        text = currentPhase.targetRangeLabel,
                         style = TabularClockStyle.copy(
-                            fontSize = 11.sp,
-                            letterSpacing = 1.8.sp,
+                            fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.primary
-                        )
+                        ),
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
                     )
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Arabic Typography Calligraphy
                 Text(
                     text = currentPhase.arabic,
-                    fontSize = 32.sp,
-                    lineHeight = 44.sp,
+                    fontSize = 34.sp,
+                    lineHeight = 46.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurface,
                     textAlign = TextAlign.Center,
@@ -286,38 +257,39 @@ fun TasbihScreen(
 
                 Spacer(modifier = Modifier.height(6.dp))
 
-                // Transliteration & English Meaning
                 Text(
                     text = currentPhase.transliteration,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Medium,
-                    letterSpacing = 0.5.sp,
-                    color = MaterialTheme.colorScheme.primary,
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.primary
+                    ),
                     textAlign = TextAlign.Center
                 )
+
+                Spacer(modifier = Modifier.height(2.dp))
 
                 Text(
                     text = currentPhase.translation,
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    ),
                     textAlign = TextAlign.Center
                 )
 
-                Spacer(modifier = Modifier.height(36.dp))
+                Spacer(modifier = Modifier.height(32.dp))
 
-                // Massive Circular Progress Display & Number
                 Box(
                     contentAlignment = Alignment.Center,
-                    modifier = Modifier.size(230.dp)
+                    modifier = Modifier.size(236.dp)
                 ) {
-                    // Ambient glow background
                     Box(
                         modifier = Modifier
-                            .size(210.dp)
+                            .size(218.dp)
                             .background(
                                 Brush.radialGradient(
                                     colors = listOf(
-                                        MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                                        MaterialTheme.colorScheme.primary.copy(alpha = 0.14f),
                                         Color.Transparent
                                     )
                                 ),
@@ -325,40 +297,33 @@ fun TasbihScreen(
                             )
                     )
 
-                    // Progress ring with subtle background track
                     CircularProgressIndicator(
-                        progress = { progressFraction },
-                        modifier = Modifier.size(210.dp),
+                        progress = { animatedProgress },
+                        modifier = Modifier.size(216.dp),
                         color = MaterialTheme.colorScheme.primary,
                         trackColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f),
-                        strokeWidth = 4.dp,
+                        strokeWidth = 6.dp,
                         strokeCap = StrokeCap.Round
                     )
 
-                    // Massive Tabular Digits
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(
                             text = count.toString(),
                             style = TabularClockStyle.copy(
-                                fontSize = if (count >= 1000) 64.sp else 86.sp,
+                                fontSize = if (count >= 1000) 60.sp else 82.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                letterSpacing = (-1).sp
+                                color = MaterialTheme.colorScheme.onSurface
                             )
                         )
 
                         Text(
                             text = when (targetMode) {
-                                TasbihTargetMode.FATIMA_100 -> "OF 100"
-                                TasbihTargetMode.TARGET_33 -> "OF 33"
-                                TasbihTargetMode.TARGET_100 -> "OF 100"
-                                TasbihTargetMode.FREE -> "TOTAL COUNT"
+                                TasbihTargetMode.FATIMA_100 -> "of 100"
+                                TasbihTargetMode.TARGET_33 -> "of 33"
+                                TasbihTargetMode.TARGET_100 -> "of 100"
+                                TasbihTargetMode.FREE -> "Total"
                             },
-                            style = TabularClockStyle.copy(
-                                fontSize = 11.sp,
-                                letterSpacing = 2.sp,
+                            style = MaterialTheme.typography.labelLarge.copy(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         )
@@ -366,58 +331,53 @@ fun TasbihScreen(
                 }
             }
 
-            // =================================================================
-            // BOTTOM SECTION: Tactile Tap Prompt & Target Mode Selector
-            // =================================================================
+            // Bottom: Clear Tap Hint & Mode Selector
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(bottom = 20.dp)
+                    .padding(bottom = 18.dp)
             ) {
                 Text(
-                    text = "TAP ANYWHERE ON SCREEN TO COUNT",
-                    style = TabularClockStyle.copy(
-                        fontSize = 11.sp,
-                        letterSpacing = 1.8.sp,
+                    text = "Tap anywhere on the screen to count",
+                    style = MaterialTheme.typography.bodyMedium.copy(
                         fontWeight = FontWeight.Medium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = promptAlpha)
                     ),
                     textAlign = TextAlign.Center
                 )
 
-                Spacer(modifier = Modifier.height(18.dp))
+                Spacer(modifier = Modifier.height(16.dp))
 
-                // Target Mode Selection Bar (33 / 100 / Free)
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(14.dp))
+                        .clip(RoundedCornerShape(16.dp))
                         .background(MaterialTheme.colorScheme.surfaceContainer)
-                        .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f), RoundedCornerShape(14.dp))
-                        .padding(4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f), RoundedCornerShape(16.dp))
+                        .padding(5.dp),
+                    horizontalArrangement = Arrangement.spacedBy(5.dp)
                 ) {
                     TasbihTargetMode.entries.forEach { mode ->
                         val isSelected = mode == targetMode
                         Box(
                             modifier = Modifier
                                 .weight(1f)
-                                .clip(RoundedCornerShape(10.dp))
+                                .clip(RoundedCornerShape(12.dp))
                                 .background(if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent)
                                 .clickable { onSelectMode(mode) }
-                                .padding(vertical = 10.dp),
+                                .padding(vertical = 11.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
                                 text = when (mode) {
-                                    TasbihTargetMode.FATIMA_100 -> "Fatima (100)"
+                                    TasbihTargetMode.FATIMA_100 -> "Fatima"
                                     TasbihTargetMode.TARGET_33 -> "33"
                                     TasbihTargetMode.TARGET_100 -> "100"
                                     TasbihTargetMode.FREE -> "Free"
                                 },
-                                style = TabularClockStyle.copy(
-                                    fontSize = 11.sp,
+                                style = MaterialTheme.typography.labelMedium.copy(
+                                    fontSize = 13.sp,
                                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                                     color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -428,28 +388,21 @@ fun TasbihScreen(
             }
         }
 
-        // Reset Confirmation Dialog to protect user from accidental clears
         if (showResetDialog) {
             AlertDialog(
                 onDismissRequest = { showResetDialog = false },
                 containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                titleContentColor = MaterialTheme.colorScheme.onSurface,
-                textContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                shape = RoundedCornerShape(16.dp),
+                shape = RoundedCornerShape(20.dp),
                 title = {
                     Text(
-                        text = "Reset Tasbih Counter?",
-                        style = TabularClockStyle.copy(
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
+                        text = "Reset Counter?",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
                     )
                 },
                 text = {
                     Text(
-                        text = "Current count of $count will be reset back to 0.",
-                        fontSize = 13.sp,
+                        text = "Start over from 0? Your current count is $count.",
+                        style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 },
@@ -470,7 +423,7 @@ fun TasbihScreen(
                 },
                 dismissButton = {
                     OutlinedButton(onClick = { showResetDialog = false }) {
-                        Text("Cancel", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("Keep", color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             )
@@ -478,10 +431,6 @@ fun TasbihScreen(
     }
 }
 
-/**
- * Triggers instant system [HapticFeedbackConstants.CLOCK_TICK] on every tap.
- * Falls back to minimal predefined tick on platforms where view haptics are suppressed.
- */
 private fun triggerClockTickHaptic(view: View, context: Context) {
     val performed = view.performHapticFeedback(
         HapticFeedbackConstants.CLOCK_TICK,
@@ -498,28 +447,19 @@ private fun triggerClockTickHaptic(view: View, context: Context) {
     }
 }
 
-/**
- * Triggers a distinct tactile double-pulse waveform vibration at milestone intervals
- * (33, 66, 99, 100) so the user senses phase completion without looking at the screen.
- */
 private fun triggerMilestoneVibration(context: Context) {
     val vibrator = getVibrator(context) ?: return
     if (!vibrator.hasVibrator()) return
-
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
         val timings = longArrayOf(0, 50, 40, 110)
         val amplitudes = intArrayOf(0, 220, 0, 255)
-        val effect = VibrationEffect.createWaveform(timings, amplitudes, -1)
-        vibrator.vibrate(effect)
+        vibrator.vibrate(VibrationEffect.createWaveform(timings, amplitudes, -1))
     } else {
         @Suppress("DEPRECATION")
         vibrator.vibrate(longArrayOf(0, 50, 40, 110), -1)
     }
 }
 
-/**
- * Resolves the system Vibrator instance compatible with Android 8.0 through 15 (SDK 26 - 36).
- */
 private fun getVibrator(context: Context): Vibrator? {
     return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
         val manager = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
@@ -530,7 +470,7 @@ private fun getVibrator(context: Context): Vibrator? {
     }
 }
 
-@Preview(name = "Tasbih Screen OLED Dark", showBackground = true, uiMode = Configuration.UI_MODE_NIGHT_YES)
+@Preview(name = "Tasbih Screen Dark", showBackground = true, uiMode = Configuration.UI_MODE_NIGHT_YES)
 @Composable
 private fun TasbihScreenPreview() {
     HayyaTheme {

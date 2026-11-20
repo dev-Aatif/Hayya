@@ -2,9 +2,13 @@
 <resources>
     <string name="app_name">Hayya</string>
     <string name="widget_compact_name">Hayya Next Prayer</string>
-    <string name="widget_compact_description">Compact 2x2 upcoming prayer countdown</string>
+    <string name="widget_compact_description">Compact 2x2 next prayer time and window progress</string>
     <string name="widget_timetable_name">Hayya Full Timetable</string>
-    <string name="widget_timetable_description">Wide 4x2 prayer timetable with live countdown</string>
+    <string name="widget_timetable_description">Wide 4x2 next prayer hero and full daily schedule</string>
     <string name="widget_daily_prayers_name">Hayya Daily Prayers</string>
-    <string name="widget_daily_prayers_description">Daily prayer tracker pips and times</string>
+    <string name="widget_daily_prayers_description">Interactive 4x2 prayer check-off tracker and times</string>
+    <string name="widget_banner_name">Hayya Quick Strip</string>
+    <string name="widget_banner_description">Slim 4x1 next prayer bar with 1-tap prayer pips</string>
+    <string name="widget_night_fasting_name">Hayya Night &amp; Fasting</string>
+    <string name="widget_night_fasting_description">Suhoor, Iftar, Tahajjud (Last Third) and Midnight times</string>
 </resources>

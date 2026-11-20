@@ -1,8 +1,33 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
 }
+
+val keystorePropertiesFile = rootProject.file("keystore.properties")
+val keystoreProperties = Properties().apply {
+    if (keystorePropertiesFile.exists()) {
+        keystorePropertiesFile.inputStream().use { load(it) }
+    }
+}
+
+fun signingProp(propName: String, envName: String): String? {
+    val value = keystoreProperties.getProperty(propName)?.trim()?.takeIf { it.isNotEmpty() }
+        ?: System.getenv(envName)?.trim()?.takeIf { it.isNotEmpty() }
+    return value
+}
+
+val releaseStorePath = signingProp("storeFile", "HAYYA_KEYSTORE_FILE")
+val releaseStorePassword = signingProp("storePassword", "HAYYA_KEYSTORE_PASSWORD")
+val releaseKeyAlias = signingProp("keyAlias", "HAYYA_KEY_ALIAS")
+val releaseKeyPassword = signingProp("keyPassword", "HAYYA_KEY_PASSWORD")
+val releaseKeystoreFile = releaseStorePath?.let { rootProject.file(it) }?.takeIf { it.exists() }
+val hasReleaseSigning = releaseKeystoreFile != null &&
+    releaseStorePassword != null &&
+    releaseKeyAlias != null &&
+    releaseKeyPassword != null
 
 android {
     namespace = "dev.hayya.core"
@@ -19,24 +44,26 @@ android {
     }
 
     signingConfigs {
-        create("release") {
-            storeFile = file("${rootDir}/hayya-release.jks")
-            storePassword = "hayyapassword"
-            keyAlias = "hayyakey"
-            keyPassword = "hayyapassword"
-            enableV1Signing = true
-            enableV2Signing = true
+        if (hasReleaseSigning) {
+            create("release") {
+                storeFile = releaseKeystoreFile
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+                enableV1Signing = true
+                enableV2Signing = true
+            }
         }
     }
 
     buildTypes {
         release {
-            isMinifyEnabled = false
-            signingConfig = signingConfigs.getByName("release")
+            isMinifyEnabled = true
+            isShrinkResources = true
+            if (hasReleaseSigning) {
+                signingConfig = signingConfigs.getByName("release")
+            }
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-        }
-        debug {
-            signingConfig = signingConfigs.getByName("release")
         }
     }
 

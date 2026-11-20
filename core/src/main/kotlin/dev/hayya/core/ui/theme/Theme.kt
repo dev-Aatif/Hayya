@@ -15,101 +15,125 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
+import dev.hayya.core.domain.model.PrayerType
 import dev.hayya.core.domain.model.ThemeModeOption
 
-// Pure OLED Dark Design Tokens (canonical references for OLED battery preservation)
-val OledBackground = Color(0xFF08090A)
+// Pure OLED Dark Design Tokens
+val OledBackground = Color(0xFF07080A)
 val LockscreenWakeBackground = Color(0xFF000000)
-val ElevatedCardSurface = Color(0xFF121417)
-val CardBorderColor = Color(0xFF1F2328)
-val WarmSandAccent = Color(0xFFE5C378)
-val WarmSandAccentSubtle = Color(0x33E5C378)
+val ElevatedCardSurface = Color(0xFF111317)
+val CardBorderColor = Color(0xFF1E2229)
+val WarmSandAccent = Color(0xFFE7C476)
+val WarmSandAccentSubtle = Color(0x33E7C476)
 
-val TextPrimary = Color(0xFFEDEDED)
-val TextSecondary = Color(0xFF8B949E)
-val TextMuted = Color(0xFF484F58)
+val TextPrimary = Color(0xFFF3F4F6)
+val TextSecondary = Color(0xFF9CA3AF)
+val TextMuted = Color(0xFF6B7280)
 
-val TrackBackground = Color(0xFF141619)
+val TrackBackground = Color(0xFF16191F)
 
-/**
- * Geometric typeface Sora styling designed by Jonathan Barnbrook and Julián Moncada.
- * Built for screen clarity, modern tabular figures, and balanced rhythm.
- * Employs clean system geometric Sans-Serif ensuring 100% stable, crash-free execution.
- */
+// Semantic Status & Celestial Accents
+val HayyaSuccess = Color(0xFF34D399)
+val HayyaSuccessDark = Color(0xFF15803D)
+val HayyaWarning = Color(0xFFFBBF24)
+
+val DawnTint = Color(0xFF818CF8)      // Soft dawn twilight indigo
+val SunriseTint = Color(0xFFFBBF24)   // Morning golden amber
+val NoonTint = Color(0xFFF59E0B)      // Midday warm gold
+val AsrTint = Color(0xFFE7C476)       // Afternoon warm sand
+val MaghribTint = Color(0xFFFB7185)   // Sunset coral rose
+val IshaTint = Color(0xFF60A5FA)      // Night starlit blue
+
+fun prayerAccentColor(prayerType: PrayerType): Color = when (prayerType) {
+    PrayerType.FAJR -> DawnTint
+    PrayerType.SUNRISE -> SunriseTint
+    PrayerType.DHUHR -> NoonTint
+    PrayerType.ASR -> AsrTint
+    PrayerType.MAGHRIB -> MaghribTint
+    PrayerType.ISHA -> IshaTint
+}
+
 val SoraFontFamily: FontFamily = FontFamily.SansSerif
 
 /**
- * Signature Pure OLED Dark ColorScheme for battery-neutral, high-contrast night viewing.
+ * Signature Pure OLED Dark ColorScheme for calm, high-contrast viewing.
  */
 val DarkColorScheme = darkColorScheme(
     primary = WarmSandAccent,
-    onPrimary = Color(0xFF1A1500),
-    primaryContainer = Color(0xFF2B281D),
+    onPrimary = Color(0xFF1B1400),
+    primaryContainer = Color(0xFF2C2617),
     onPrimaryContainer = WarmSandAccent,
     secondary = Color(0xFFD5C4A1),
     onSecondary = Color(0xFF382F16),
-    secondaryContainer = Color(0xFF1E2126),
-    onSecondaryContainer = WarmSandAccent,
+    secondaryContainer = Color(0xFF1B1E24),
+    onSecondaryContainer = Color(0xFFEAE0C8),
+    tertiary = HayyaSuccess,
+    onTertiary = Color(0xFF042F1E),
     surface = ElevatedCardSurface,
     onSurface = TextPrimary,
     surfaceVariant = TrackBackground,
     onSurfaceVariant = TextSecondary,
     surfaceContainer = ElevatedCardSurface,
-    surfaceContainerHigh = Color(0xFF1A1D21),
+    surfaceContainerHigh = Color(0xFF181B21),
     background = OledBackground,
     onBackground = TextPrimary,
     outline = CardBorderColor,
-    outlineVariant = Color(0xFF262B32)
+    outlineVariant = Color(0xFF282D36),
+    error = Color(0xFFF87171),
+    errorContainer = Color(0xFF3B1518)
 )
 
 /**
- * Elegant Ivory / Warm Sand Light ColorScheme for daylight ambient readability.
+ * Warm Ivory & Sand Light ColorScheme for effortless daytime readability.
  */
 val LightColorScheme = lightColorScheme(
-    primary = Color(0xFF7A5900),
+    primary = Color(0xFF8C6200),
     onPrimary = Color(0xFFFFFFFF),
-    primaryContainer = Color(0xFFFFDEA4),
-    onPrimaryContainer = Color(0xFF261900),
-    secondary = Color(0xFF6B5D3F),
+    primaryContainer = Color(0xFFFFE5B4),
+    onPrimaryContainer = Color(0xFF2C1D00),
+    secondary = Color(0xFF6A5C40),
     onSecondary = Color(0xFFFFFFFF),
-    secondaryContainer = Color(0xFFF5E1BB),
-    onSecondaryContainer = Color(0xFF241A04),
-    surface = Color(0xFFFFFBF7),
-    onSurface = Color(0xFF1E1B16),
-    surfaceVariant = Color(0xFFEFE4D2),
-    onSurfaceVariant = Color(0xFF4E4639),
-    surfaceContainer = Color(0xFFF8F2E8),
-    surfaceContainerHigh = Color(0xFFF3ECE0),
-    background = Color(0xFFFBF8F2),
-    onBackground = Color(0xFF1E1B16),
-    outline = Color(0xFF807567),
-    outlineVariant = Color(0xFFD2C5B4)
+    secondaryContainer = Color(0xFFF3E6CE),
+    onSecondaryContainer = Color(0xFF241A06),
+    tertiary = HayyaSuccessDark,
+    onTertiary = Color(0xFFFFFFFF),
+    surface = Color(0xFFFFFCF7),
+    onSurface = Color(0xFF181612),
+    surfaceVariant = Color(0xFFF0E7D8),
+    onSurfaceVariant = Color(0xFF574F44),
+    surfaceContainer = Color(0xFFFFFFFF),
+    surfaceContainerHigh = Color(0xFFF7F1E6),
+    background = Color(0xFFF8F4EC),
+    onBackground = Color(0xFF181612),
+    outline = Color(0xFFD8CCB8),
+    outlineVariant = Color(0xFFE3D9C9),
+    error = Color(0xFFDC2626),
+    errorContainer = Color(0xFFFEE2E2)
 )
 
 /**
- * Complete Material 3 typography powered by Jonathan Barnbrook's Sora typeface.
+ * Clean, legible Material 3 typography hierarchy calibrated for effortless reading across all ages.
  */
 val HayyaTypography = Typography(
     displayLarge = TextStyle(fontFamily = SoraFontFamily, fontWeight = FontWeight.Bold, fontSize = 57.sp, lineHeight = 64.sp),
     displayMedium = TextStyle(fontFamily = SoraFontFamily, fontWeight = FontWeight.Bold, fontSize = 45.sp, lineHeight = 52.sp),
     displaySmall = TextStyle(fontFamily = SoraFontFamily, fontWeight = FontWeight.Bold, fontSize = 36.sp, lineHeight = 44.sp),
-    headlineLarge = TextStyle(fontFamily = SoraFontFamily, fontWeight = FontWeight.Bold, fontSize = 32.sp, lineHeight = 40.sp),
-    headlineMedium = TextStyle(fontFamily = SoraFontFamily, fontWeight = FontWeight.SemiBold, fontSize = 28.sp, lineHeight = 36.sp),
-    headlineSmall = TextStyle(fontFamily = SoraFontFamily, fontWeight = FontWeight.SemiBold, fontSize = 24.sp, lineHeight = 32.sp),
-    titleLarge = TextStyle(fontFamily = SoraFontFamily, fontWeight = FontWeight.SemiBold, fontSize = 22.sp, lineHeight = 28.sp),
-    titleMedium = TextStyle(fontFamily = SoraFontFamily, fontWeight = FontWeight.Medium, fontSize = 16.sp, lineHeight = 24.sp, letterSpacing = 0.15.sp),
-    titleSmall = TextStyle(fontFamily = SoraFontFamily, fontWeight = FontWeight.Medium, fontSize = 14.sp, lineHeight = 20.sp, letterSpacing = 0.1.sp),
-    bodyLarge = TextStyle(fontFamily = SoraFontFamily, fontWeight = FontWeight.Normal, fontSize = 16.sp, lineHeight = 24.sp, letterSpacing = 0.5.sp),
-    bodyMedium = TextStyle(fontFamily = SoraFontFamily, fontWeight = FontWeight.Normal, fontSize = 14.sp, lineHeight = 20.sp, letterSpacing = 0.25.sp),
-    bodySmall = TextStyle(fontFamily = SoraFontFamily, fontWeight = FontWeight.Normal, fontSize = 12.sp, lineHeight = 16.sp, letterSpacing = 0.4.sp),
-    labelLarge = TextStyle(fontFamily = SoraFontFamily, fontWeight = FontWeight.Medium, fontSize = 14.sp, lineHeight = 20.sp, letterSpacing = 0.1.sp),
-    labelMedium = TextStyle(fontFamily = SoraFontFamily, fontWeight = FontWeight.Medium, fontSize = 12.sp, lineHeight = 16.sp, letterSpacing = 0.5.sp),
-    labelSmall = TextStyle(fontFamily = SoraFontFamily, fontWeight = FontWeight.Medium, fontSize = 11.sp, lineHeight = 16.sp, letterSpacing = 0.5.sp)
+    headlineLarge = TextStyle(fontFamily = SoraFontFamily, fontWeight = FontWeight.Bold, fontSize = 30.sp, lineHeight = 38.sp),
+    headlineMedium = TextStyle(fontFamily = SoraFontFamily, fontWeight = FontWeight.SemiBold, fontSize = 24.sp, lineHeight = 32.sp),
+    headlineSmall = TextStyle(fontFamily = SoraFontFamily, fontWeight = FontWeight.SemiBold, fontSize = 20.sp, lineHeight = 28.sp),
+    titleLarge = TextStyle(fontFamily = SoraFontFamily, fontWeight = FontWeight.SemiBold, fontSize = 18.sp, lineHeight = 26.sp),
+    titleMedium = TextStyle(fontFamily = SoraFontFamily, fontWeight = FontWeight.SemiBold, fontSize = 16.sp, lineHeight = 22.sp),
+    titleSmall = TextStyle(fontFamily = SoraFontFamily, fontWeight = FontWeight.Medium, fontSize = 14.sp, lineHeight = 20.sp),
+    bodyLarge = TextStyle(fontFamily = SoraFontFamily, fontWeight = FontWeight.Normal, fontSize = 16.sp, lineHeight = 24.sp),
+    bodyMedium = TextStyle(fontFamily = SoraFontFamily, fontWeight = FontWeight.Normal, fontSize = 14.sp, lineHeight = 20.sp),
+    bodySmall = TextStyle(fontFamily = SoraFontFamily, fontWeight = FontWeight.Normal, fontSize = 12.sp, lineHeight = 17.sp),
+    labelLarge = TextStyle(fontFamily = SoraFontFamily, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, lineHeight = 20.sp),
+    labelMedium = TextStyle(fontFamily = SoraFontFamily, fontWeight = FontWeight.Medium, fontSize = 12.sp, lineHeight = 16.sp),
+    labelSmall = TextStyle(fontFamily = SoraFontFamily, fontWeight = FontWeight.Medium, fontSize = 11.sp, lineHeight = 16.sp)
 )
 
 /**
- * Tabular figures styling (tnum) ensuring jitter-free countdown timers, clocks, and millisecond displays.
- * Color defaults to LocalContentColor so callers and themes control color adaptively.
+ * Tabular figures styling (tnum) ensuring jitter-free countdown timers and clocks.
  */
 val TabularCountdownStyle = TextStyle(
     fontFamily = SoraFontFamily,
@@ -122,7 +146,7 @@ val TabularCountdownStyle = TextStyle(
 val TabularClockStyle = TextStyle(
     fontFamily = SoraFontFamily,
     fontWeight = FontWeight.SemiBold,
-    fontSize = 17.sp,
+    fontSize = 16.sp,
     fontFeatureSettings = "tnum"
 )
 
@@ -130,7 +154,7 @@ val HeroLabelStyle = TextStyle(
     fontFamily = SoraFontFamily,
     fontWeight = FontWeight.Medium,
     fontSize = 24.sp,
-    letterSpacing = 4.sp
+    letterSpacing = 3.sp
 )
 
 @Composable

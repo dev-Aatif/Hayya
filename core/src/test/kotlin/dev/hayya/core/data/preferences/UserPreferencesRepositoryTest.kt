@@ -14,6 +14,7 @@ import dev.hayya.core.domain.model.MadhabOption
 import dev.hayya.core.domain.model.PrayerType
 import dev.hayya.core.domain.model.ThemeModeOption
 import dev.hayya.core.domain.model.VolumeEscalationOption
+import dev.hayya.core.domain.tasbih.TasbihTargetMode
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -58,15 +59,15 @@ class UserPreferencesRepositoryTest {
     fun defaultPreferences_matchesExpectedDefaults() = runTest {
         val prefs = repository.userPreferencesFlow.first()
 
-        // Default Makkah coordinates
-        assertThat(prefs.location.latitude).isEqualTo(21.4225)
-        assertThat(prefs.location.longitude).isEqualTo(39.8262)
+        // Default Larkana coordinates (V1 Pakistan / Larkana Division focus)
+        assertThat(prefs.location.latitude).isEqualTo(27.5590)
+        assertThat(prefs.location.longitude).isEqualTo(68.2120)
         assertThat(prefs.location.altitude).isEqualTo(0.0)
-        assertThat(prefs.location.resolvedLocationName).isEqualTo("Makkah, Saudi Arabia")
+        assertThat(prefs.location.resolvedLocationName).isEqualTo("Larkana, Pakistan")
 
         // Default calculation settings
-        assertThat(prefs.calculationMethod).isEqualTo(CalculationMethodOption.MUSLIM_WORLD_LEAGUE)
-        assertThat(prefs.madhab).isEqualTo(MadhabOption.STANDARD)
+        assertThat(prefs.calculationMethod).isEqualTo(CalculationMethodOption.KARACHI)
+        assertThat(prefs.madhab).isEqualTo(MadhabOption.HANAFI)
         assertThat(prefs.highLatitudeRule).isEqualTo(HighLatitudeRuleOption.MIDDLE_OF_THE_NIGHT)
         assertThat(prefs.ishaExpiresAtMidnight).isFalse()
 
@@ -177,8 +178,8 @@ class UserPreferencesRepositoryTest {
         repository.resetToDefaults()
 
         prefs = repository.userPreferencesFlow.first()
-        assertThat(prefs.location.latitude).isEqualTo(21.4225)
-        assertThat(prefs.calculationMethod).isEqualTo(CalculationMethodOption.MUSLIM_WORLD_LEAGUE)
+        assertThat(prefs.location.latitude).isEqualTo(27.5590)
+        assertThat(prefs.calculationMethod).isEqualTo(CalculationMethodOption.KARACHI)
         assertThat(prefs.getOffset(PrayerType.DHUHR)).isEqualTo(0)
     }
 
@@ -357,5 +358,22 @@ class UserPreferencesRepositoryTest {
         val updated = repository.userPreferencesFlow.first()
         assertThat(updated.tahajjudAlarmEnabled).isTrue()
         assertThat(updated.tahajjudAlarmMinutesOffset).isEqualTo(15)
+    }
+
+    @Test
+    fun tasbihAndSalawat_persistAndEmitUpdatedCounts() = runTest {
+        val initial = repository.userPreferencesFlow.first()
+        assertThat(initial.tasbihCount).isEqualTo(0)
+        assertThat(initial.tasbihMode).isEqualTo(TasbihTargetMode.FATIMA_100)
+        assertThat(initial.salawatCount).isEqualTo(0)
+
+        repository.updateTasbihCount(33)
+        repository.updateTasbihMode(TasbihTargetMode.TARGET_33)
+        repository.updateSalawatCount(10)
+
+        val updated = repository.userPreferencesFlow.first()
+        assertThat(updated.tasbihCount).isEqualTo(33)
+        assertThat(updated.tasbihMode).isEqualTo(TasbihTargetMode.TARGET_33)
+        assertThat(updated.salawatCount).isEqualTo(10)
     }
 }

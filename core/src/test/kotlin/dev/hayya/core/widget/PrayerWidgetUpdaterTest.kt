@@ -6,6 +6,7 @@ import androidx.glance.appwidget.SizeMode
 import androidx.glance.appwidget.updateAll
 import com.google.common.truth.Truth.assertThat
 import dev.hayya.core.domain.model.PrayerType
+import dev.hayya.core.domain.model.ThemeModeOption
 import io.mockk.Runs
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -80,14 +81,37 @@ class PrayerWidgetUpdaterTest {
     }
 
     @Test
+    fun nextPrayerBannerWidget_andFastingNightWidget_useExactSizeMode() {
+        assertThat(NextPrayerBannerWidget().sizeMode).isEqualTo(SizeMode.Exact)
+        assertThat(FastingAndNightWidget().sizeMode).isEqualTo(SizeMode.Exact)
+    }
+
+    @Test
     fun widgetReceivers_instantiateGlanceAppWidgetsProperly() {
         val compactReceiver = CompactPrayerWidgetReceiver()
         val timetableReceiver = FullTimetableWidgetReceiver()
         val dailyReceiver = DailyPrayersWidgetReceiver()
+        val bannerReceiver = NextPrayerBannerWidgetReceiver()
+        val nightReceiver = FastingAndNightWidgetReceiver()
 
         assertThat(compactReceiver.glanceAppWidget).isInstanceOf(CompactPrayerWidget::class.java)
         assertThat(timetableReceiver.glanceAppWidget).isInstanceOf(FullTimetableWidget::class.java)
         assertThat(dailyReceiver.glanceAppWidget).isInstanceOf(DailyPrayersWidget::class.java)
+        assertThat(bannerReceiver.glanceAppWidget).isInstanceOf(NextPrayerBannerWidget::class.java)
+        assertThat(nightReceiver.glanceAppWidget).isInstanceOf(FastingAndNightWidget::class.java)
+    }
+
+    @Test
+    fun widgetTheme_supportsAllThemeModes_andShortLabels() {
+        ThemeModeOption.entries.forEach { mode ->
+            val palette = WidgetTheme.paletteFor(mode)
+            assertThat(palette.accent).isNotNull()
+            assertThat(palette.surface).isNotNull()
+        }
+
+        assertThat(WidgetTheme.shortPrayerLabel(PrayerType.DHUHR, isFriday = false)).isEqualTo("Dhuhr")
+        assertThat(WidgetTheme.shortPrayerLabel(PrayerType.DHUHR, isFriday = true)).isEqualTo("Jumu'ah")
+        assertThat(WidgetTheme.compactInitial(PrayerType.DHUHR, isFriday = true)).isEqualTo("J")
     }
 
     @Test
@@ -120,7 +144,7 @@ class PrayerWidgetUpdaterTest {
 
             PrayerWidgetUpdater.updateAllWidgets(context)
 
-            coVerify(exactly = 3) { any<GlanceAppWidget>().updateAll(context) }
+            coVerify(exactly = 5) { any<GlanceAppWidget>().updateAll(context) }
             verify(exactly = 0) { context.sendBroadcast(any()) }
             verify(exactly = 0) { context.sendBroadcast(any(), any()) }
         } finally {

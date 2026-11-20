@@ -6,11 +6,12 @@ import androidx.glance.appwidget.updateAll
 import com.batoulapps.adhan.Coordinates
 import dev.hayya.core.data.prayerlog.PrayerLogRepository
 import dev.hayya.core.data.preferences.UserPreferencesRepository
-import dev.hayya.core.domain.calculation.DailyPrayerTimes
+import dev.hayya.core.domain.calculation.NightFastingCalculator
 import dev.hayya.core.domain.calculation.PrayerCalculationEngine
 import dev.hayya.core.domain.model.PrayerType
 import dev.hayya.core.domain.model.PrayerWindow
-import dev.hayya.core.domain.model.UserPreferences
+import dev.hayya.core.domain.model.ThemeModeOption
+import dev.hayya.core.domain.ramadan.IslamicCalendarHelper
 import dev.hayya.core.system.receivers.PreferenceDataStoreProvider
 import dev.hayya.core.ui.viewmodel.PrayerViewModel
 import kotlinx.coroutines.Dispatchers
@@ -21,21 +22,33 @@ import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.Instant
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
+import java.util.Locale
 
 /**
- * Snapshot representation of current prayer timetable data for AppWidgets.
+ * Snapshot representation of current prayer timetable, fasting, and theme data for AppWidgets.
  */
 data class WidgetPrayerSnapshot(
     val nextPrayerName: String = "FAJR",
     val nextPrayerTimeFormatted: String = "--:--",
     val countdownFormatted: String = "--:--",
     val activePrayerName: String = "FAJR",
-    val locationName: String = "Makkah",
+    val locationName: String = "Larkana",
     val dailyTimes: List<Pair<PrayerType, String>> = emptyList(),
     val pastPrayers: Set<PrayerType> = emptySet(),
     val activePrayers: Set<PrayerType> = emptySet(),
     val completedPrayers: Set<PrayerType> = emptySet(),
-    val isFriday: Boolean = false
+    val isFriday: Boolean = false,
+    val nextPrayerType: PrayerType = PrayerType.FAJR,
+    val windowProgress: Float = 0.0f,
+    val hijriDateShort: String = "",
+    val sunriseFormatted: String = "--:--",
+    val suhoorFormatted: String = "--:--",
+    val iftarFormatted: String = "--:--",
+    val tahajjudStartFormatted: String = "--:--",
+    val islamicMidnightFormatted: String = "--:--",
+    val isTahajjudActive: Boolean = false,
+    val themeMode: ThemeModeOption = ThemeModeOption.DARK,
+    val compactDailyTimes: List<Pair<PrayerType, String>> = emptyList()
 ) {
     val completedCount: Int get() = completedPrayers.size
 }
@@ -47,23 +60,27 @@ object PrayerWidgetUpdater {
 
     private const val TAG = "PrayerWidgetUpdater"
     const val ACTION_PRAYER_DATA_CHANGED = "dev.hayya.widget.ACTION_PRAYER_DATA_CHANGED"
+    const val EXTRA_START_DESTINATION = "dev.hayya.widget.EXTRA_START_DESTINATION"
+
+    const val DEST_TRACKER = "tracker"
+    const val DEST_TAHAJJUD = "tahajjud"
+    const val DEST_RAMADAN = "ramadan"
 
     /**
      * Reads current calculation and preferences asynchronously and updates all AppWidgets.
      *
-     * IMPORTANT: This function must NOT broadcast [ACTION_PRAYER_DATA_CHANGED]. Three receivers
-     * (CompactPrayerWidgetReceiver, FullTimetableWidgetReceiver, PrayerWidgetReceiver) handle
-     * that action by calling this function, so re-broadcasting here creates an unbounded,
-     * exponentially fanning-out broadcast loop that pins the CPU and drains the battery.
+     * IMPORTANT: This function must NOT broadcast [ACTION_PRAYER_DATA_CHANGED]. Receivers handle
+     * that action by calling this function, so re-broadcasting here creates an unbounded loop.
      */
     suspend fun updateAllWidgets(context: Context) {
         withContext(Dispatchers.Default) {
             try {
-                // Update Glance widgets
                 CompactPrayerWidget().updateAll(context)
                 FullTimetableWidget().updateAll(context)
                 DailyPrayersWidget().updateAll(context)
-                Log.d(TAG, "Successfully refreshed all prayer AppWidgets")
+                NextPrayerBannerWidget().updateAll(context)
+                FastingAndNightWidget().updateAll(context)
+                Log.d(TAG, "Successfully refreshed all 5 prayer AppWidgets")
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to update prayer widgets", e)
             }
@@ -71,7 +88,7 @@ object PrayerWidgetUpdater {
     }
 
     /**
-     * Computes the current prayer snapshot directly from offline calculation engine.
+     * Computes the current prayer snapshot directly from the offline calculation engine.
      */
     suspend fun loadCurrentSnapshot(context: Context): WidgetPrayerSnapshot {
         return withContext(Dispatchers.Default) {
@@ -121,15 +138,18 @@ object PrayerWidgetUpdater {
                     "in ${remainingMinutes}m"
                 }
 
-                // 5 daily prayers list (Fajr, Dhuhr, Asr, Maghrib, Isha)
-                val timetable = listOf(
+                val obligatoryOrder = listOf(
                     PrayerType.FAJR,
                     PrayerType.DHUHR,
                     PrayerType.ASR,
                     PrayerType.MAGHRIB,
                     PrayerType.ISHA
-                ).map { prayer ->
-                    prayer to PrayerViewModel.formatTimeOfDay(dailyTimes.timeFor(prayer), timeZone)
+                )
+                val timetable = obligatoryOrder.map { prayer ->
+                    prayer to formatCleanTime(dailyTimes.timeFor(prayer), timeZone)
+                }
+                val compactTimetable = obligatoryOrder.map { prayer ->
+                    prayer to formatCompactTime(dailyTimes.timeFor(prayer), timeZone)
                 }
 
                 val pastPrayers = PrayerType.entries.filter { nowMillis > dailyTimes.timeFor(it) }.toSet()
@@ -141,26 +161,70 @@ object PrayerWidgetUpdater {
                 val prayerLogRepo = PrayerLogRepository(dataStore)
                 val dailyLog = prayerLogRepo.observeDailyLog(localDate).first()
                 val isFriday = localDate.dayOfWeek == DayOfWeek.FRIDAY
+                val islamicDate = IslamicCalendarHelper.resolveIslamicDate(localDate)
+                val tahajjud = NightFastingCalculator.resolveTahajjudSchedule(dailyTimes, nowMillis, timeZone)
+
+                val shortCity = userPrefs.location.resolvedLocationName
+                    .ifEmpty { "Larkana" }
+                    .substringBefore(",")
+                    .trim()
 
                 WidgetPrayerSnapshot(
-                    nextPrayerName = nextPrayer.displayName(isFriday),
-                    nextPrayerTimeFormatted = PrayerViewModel.formatTimeOfDay(nextPrayerMillis, timeZone),
+                    nextPrayerName = WidgetTheme.shortPrayerLabel(nextPrayer, isFriday),
+                    nextPrayerTimeFormatted = formatCleanTime(nextPrayerMillis, timeZone),
                     countdownFormatted = countdownFormatted,
                     activePrayerName = when (window) {
-                        is PrayerWindow.Active -> window.currentPrayer.displayName(isFriday)
-                        is PrayerWindow.SunriseInterval -> "SUNRISE"
+                        is PrayerWindow.Active -> WidgetTheme.shortPrayerLabel(window.currentPrayer, isFriday)
+                        is PrayerWindow.SunriseInterval -> "Sunrise"
                     },
-                    locationName = userPrefs.location.resolvedLocationName.ifEmpty { "Makkah" },
+                    locationName = shortCity,
                     dailyTimes = timetable,
                     pastPrayers = pastPrayers,
                     activePrayers = activePrayers,
                     completedPrayers = dailyLog.completedPrayers,
-                    isFriday = isFriday
+                    isFriday = isFriday,
+                    nextPrayerType = nextPrayer,
+                    windowProgress = window.elapsedProgress,
+                    hijriDateShort = "${islamicDate.hijriDay} ${islamicDate.hijriMonthName}",
+                    sunriseFormatted = formatCleanTime(dailyTimes.sunrise, timeZone),
+                    suhoorFormatted = formatCleanTime(dailyTimes.fajr, timeZone),
+                    iftarFormatted = formatCleanTime(dailyTimes.maghrib, timeZone),
+                    tahajjudStartFormatted = tahajjud.formattedLastThirdStart,
+                    islamicMidnightFormatted = tahajjud.formattedIslamicMidnight,
+                    isTahajjudActive = tahajjud.isTahajjudActiveNow,
+                    themeMode = userPrefs.themeMode,
+                    compactDailyTimes = compactTimetable
                 )
             } catch (e: Exception) {
                 Log.e(TAG, "Error generating widget snapshot", e)
                 WidgetPrayerSnapshot()
             }
         }
+    }
+
+    internal fun formatCleanTime(epochMillis: Long, timeZone: TimeZone = TimeZone.currentSystemDefault()): String {
+        val localTime = Instant.fromEpochMilliseconds(epochMillis).toLocalDateTime(timeZone).time
+        val hour = localTime.hour
+        val minute = localTime.minute
+        val period = if (hour >= 12) "PM" else "AM"
+        val displayHour = when {
+            hour == 0 -> 12
+            hour > 12 -> hour - 12
+            else -> hour
+        }
+        return String.format(Locale.US, "%d:%02d %s", displayHour, minute, period)
+    }
+
+    internal fun formatCompactTime(epochMillis: Long, timeZone: TimeZone = TimeZone.currentSystemDefault()): String {
+        val localTime = Instant.fromEpochMilliseconds(epochMillis).toLocalDateTime(timeZone).time
+        val hour = localTime.hour
+        val minute = localTime.minute
+        val period = if (hour >= 12) "p" else "a"
+        val displayHour = when {
+            hour == 0 -> 12
+            hour > 12 -> hour - 12
+            else -> hour
+        }
+        return String.format(Locale.US, "%d:%02d%s", displayHour, minute, period)
     }
 }

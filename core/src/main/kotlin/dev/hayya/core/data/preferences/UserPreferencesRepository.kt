@@ -23,6 +23,7 @@ import dev.hayya.core.domain.model.SavedRingerState
 import dev.hayya.core.domain.model.ThemeModeOption
 import dev.hayya.core.domain.model.UserPreferences
 import dev.hayya.core.domain.model.VolumeEscalationOption
+import dev.hayya.core.domain.tasbih.TasbihTargetMode
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
@@ -62,6 +63,10 @@ object PreferenceKeys {
     val VOLUME_ESCALATION = stringPreferencesKey("pref_volume_escalation")
     val TAHAJJUD_ALARM_ENABLED = booleanPreferencesKey("pref_tahajjud_alarm_enabled")
     val TAHAJJUD_ALARM_MINUTES_OFFSET = intPreferencesKey("pref_tahajjud_alarm_minutes_offset")
+    val HAS_COMPLETED_ONBOARDING = booleanPreferencesKey("pref_has_completed_onboarding")
+    val TASBIH_COUNT = intPreferencesKey("pref_tasbih_count")
+    val TASBIH_MODE = stringPreferencesKey("pref_tasbih_mode")
+    val SALAWAT_COUNT = intPreferencesKey("pref_salawat_count")
 
     fun offsetKeyFor(prayer: PrayerType): Preferences.Key<Int> =
         intPreferencesKey("pref_offset_${prayer.name.lowercase()}")
@@ -376,6 +381,42 @@ class UserPreferencesRepository(
     }
 
     /**
+     * Updates whether the user has completed the quick welcome setup.
+     */
+    suspend fun updateHasCompletedOnboarding(completed: Boolean) {
+        dataStore.edit { preferences ->
+            preferences[PreferenceKeys.HAS_COMPLETED_ONBOARDING] = completed
+        }
+    }
+
+    /**
+     * Persists the Tasbih counter value.
+     */
+    suspend fun updateTasbihCount(count: Int) {
+        dataStore.edit { preferences ->
+            preferences[PreferenceKeys.TASBIH_COUNT] = count.coerceAtLeast(0)
+        }
+    }
+
+    /**
+     * Persists the selected Tasbih target mode.
+     */
+    suspend fun updateTasbihMode(mode: TasbihTargetMode) {
+        dataStore.edit { preferences ->
+            preferences[PreferenceKeys.TASBIH_MODE] = mode.name
+        }
+    }
+
+    /**
+     * Persists the Friday Salawat counter value.
+     */
+    suspend fun updateSalawatCount(count: Int) {
+        dataStore.edit { preferences ->
+            preferences[PreferenceKeys.SALAWAT_COUNT] = count.coerceAtLeast(0)
+        }
+    }
+
+    /**
      * Resets all preferences to initial defaults.
      */
     suspend fun resetToDefaults() {
@@ -385,18 +426,18 @@ class UserPreferencesRepository(
     }
 
     private fun mapUserPreferences(preferences: Preferences): UserPreferences {
-        val lat = preferences[PreferenceKeys.LATITUDE] ?: 21.4225
-        val lng = preferences[PreferenceKeys.LONGITUDE] ?: 39.8262
+        val lat = preferences[PreferenceKeys.LATITUDE] ?: 27.5590
+        val lng = preferences[PreferenceKeys.LONGITUDE] ?: 68.2120
         val alt = preferences[PreferenceKeys.ALTITUDE] ?: 0.0
-        val locationName = preferences[PreferenceKeys.LOCATION_NAME] ?: "Makkah, Saudi Arabia"
+        val locationName = preferences[PreferenceKeys.LOCATION_NAME] ?: "Larkana, Pakistan"
 
         val calculationMethod = preferences[PreferenceKeys.CALCULATION_METHOD]?.let { name ->
             runCatching { CalculationMethodOption.valueOf(name) }.getOrNull()
-        } ?: CalculationMethodOption.MUSLIM_WORLD_LEAGUE
+        } ?: CalculationMethodOption.KARACHI
 
         val madhab = preferences[PreferenceKeys.MADHAB]?.let { name ->
             runCatching { MadhabOption.valueOf(name) }.getOrNull()
-        } ?: MadhabOption.STANDARD
+        } ?: MadhabOption.HANAFI
 
         val highLatitudeRule = preferences[PreferenceKeys.HIGH_LATITUDE_RULE]?.let { name ->
             runCatching { HighLatitudeRuleOption.valueOf(name) }.getOrNull()
@@ -455,6 +496,13 @@ class UserPreferencesRepository(
 
         val tahajjudAlarmEnabled = preferences[PreferenceKeys.TAHAJJUD_ALARM_ENABLED] ?: false
         val tahajjudAlarmMinutesOffset = preferences[PreferenceKeys.TAHAJJUD_ALARM_MINUTES_OFFSET] ?: 0
+        val hasCompletedOnboarding = preferences[PreferenceKeys.HAS_COMPLETED_ONBOARDING]
+            ?: (preferences[PreferenceKeys.LOCATION_NAME] != null)
+        val tasbihCount = (preferences[PreferenceKeys.TASBIH_COUNT] ?: 0).coerceAtLeast(0)
+        val tasbihMode = preferences[PreferenceKeys.TASBIH_MODE]?.let { name ->
+            runCatching { TasbihTargetMode.valueOf(name) }.getOrNull()
+        } ?: TasbihTargetMode.FATIMA_100
+        val salawatCount = (preferences[PreferenceKeys.SALAWAT_COUNT] ?: 0).coerceAtLeast(0)
 
         return UserPreferences(
             location = GeoLocation(lat, lng, alt, locationName),
@@ -477,7 +525,11 @@ class UserPreferencesRepository(
             dynamicColorEnabled = dynamicColorEnabled,
             volumeEscalation = volumeEscalation,
             tahajjudAlarmEnabled = tahajjudAlarmEnabled,
-            tahajjudAlarmMinutesOffset = tahajjudAlarmMinutesOffset
+            tahajjudAlarmMinutesOffset = tahajjudAlarmMinutesOffset,
+            hasCompletedOnboarding = hasCompletedOnboarding,
+            tasbihCount = tasbihCount,
+            tasbihMode = tasbihMode,
+            salawatCount = salawatCount
         )
     }
 }

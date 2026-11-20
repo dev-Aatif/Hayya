@@ -227,16 +227,21 @@ class PrayerAlarmReceiverTest {
     }
 
     @Test
-    fun onReceive_suhoorAlarmAction_acquiresWakeLockAndPostsNotification() {
+    fun onReceive_suhoorAlarmAction_acquiresWakeLockAndStartsAudioServiceAndNotification() {
         val intent = mockk<Intent>(relaxed = true) {
             every { action } returns PrayerAlarmScheduler.ACTION_TRIGGER_SUHOOR_ALARM
             every { getLongExtra(PrayerAlarmScheduler.EXTRA_FAJR_MILLIS, 0L) } returns 1_700_000_000_000L
+            every { getIntExtra(PrayerAlarmScheduler.EXTRA_AUTO_SILENCE_SECONDS, any()) } returns 60
+            every { getIntExtra(PrayerAlarmScheduler.EXTRA_VOLUME_ESCALATION_SECONDS, any()) } returns 20
         }
 
         receiver.onReceive(context, intent)
 
         verify(exactly = 1) {
-            wakeLock.acquire(5_000L)
+            wakeLock.acquire(10_000L)
+        }
+        verify(atLeast = 1) {
+            ContextCompat.startForegroundService(context, any())
         }
         verify(exactly = 1) {
             notificationManagerCompat.notify(PrayerAlarmScheduler.NOTIFICATION_ID_SUHOOR, any())
@@ -258,6 +263,22 @@ class PrayerAlarmReceiverTest {
         }
         verify(exactly = 1) {
             notificationManagerCompat.notify(PrayerAlarmScheduler.NOTIFICATION_ID_EID, any())
+        }
+    }
+
+    @Test
+    fun onReceive_tahajjudAlarmAction_acquiresWakeLockAndPostsNotification() {
+        val intent = mockk<Intent>(relaxed = true) {
+            every { action } returns PrayerAlarmScheduler.ACTION_TRIGGER_TAHAJJUD_ALARM
+        }
+
+        receiver.onReceive(context, intent)
+
+        verify(exactly = 1) {
+            wakeLock.acquire(5_000L)
+        }
+        verify(exactly = 1) {
+            notificationManagerCompat.notify(PrayerAlarmScheduler.NOTIFICATION_ID_TAHAJJUD, any())
         }
     }
 }

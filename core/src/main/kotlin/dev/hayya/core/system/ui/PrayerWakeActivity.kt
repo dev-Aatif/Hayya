@@ -9,6 +9,11 @@ import android.os.Bundle
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import dev.hayya.core.system.audio.PrayerAudioService
 import dev.hayya.core.ui.screens.PrayerWakeScreen
@@ -26,10 +31,17 @@ import dev.hayya.core.ui.theme.HayyaTheme
  */
 class PrayerWakeActivity : ComponentActivity() {
 
+    private var currentNotificationId by mutableIntStateOf(-1)
+    private var prayerTypeState by mutableStateOf("Prayer")
+    private var subtitleState by mutableStateOf("")
+    private var autoSilenceSecondsState by mutableIntStateOf(PrayerAudioService.DEFAULT_TIMEOUT_SECONDS)
+    private var showPostAdhanDuaState by mutableStateOf(true)
+
     private var receiverRegistered = false
     private val playbackFinishedReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action == PrayerAudioService.ACTION_PLAYBACK_FINISHED) {
+                cancelWakeNotification()
                 finish()
             }
         }
@@ -47,29 +59,54 @@ class PrayerWakeActivity : ComponentActivity() {
         )
         receiverRegistered = true
 
-        val notificationId = intent.getIntExtra(EXTRA_NOTIFICATION_ID, -1)
-        val prayerType = intent.getStringExtra(EXTRA_PRAYER_TYPE) ?: "Prayer"
-        val alertTier = intent.getStringExtra(EXTRA_ALERT_TIER) ?: "MAIN_CALL"
-        val autoSilenceSeconds = intent.getIntExtra(
-            EXTRA_AUTO_SILENCE_SECONDS,
-            PrayerAudioService.DEFAULT_TIMEOUT_SECONDS
-        )
-        val showPostAdhanDua = intent.getBooleanExtra(EXTRA_SHOW_POST_ADHAN_DUA, true)
+        applyIntentExtras(intent)
 
         setContent {
             HayyaTheme {
-                PrayerWakeScreen(
-                    prayerName = prayerType,
-                    windowExpiryText = if (prayerType.equals("JUMU'AH", ignoreCase = true)) {
-                        "Calling to Jumu'ah prayer"
-                    } else {
-                        "Calling to $prayerType prayer"
-                    },
-                    autoSilenceSeconds = autoSilenceSeconds,
-                    showPostAdhanDua = showPostAdhanDua,
-                    onDismiss = { stopAlarm() },
-                    onMute = { muteAlarm() }
-                )
+                val prayerType = prayerTypeState
+                val resolvedExpiryText = subtitleState.ifBlank {
+                    when {
+                        prayerType.equals("JUMU'AH", ignoreCase = true) -> "Calling to Jumu'ah prayer"
+                        prayerType.equals("SUHOOR", ignoreCase = true) -> "Eat Suhoor & make Niyyah before Fajr"
+                        else -> "Calling to $prayerType prayer"
+                    }
+                }
+                androidx.compose.runtime.key(currentNotificationId, prayerType) {
+                    PrayerWakeScreen(
+                        prayerName = prayerType,
+                        windowExpiryText = resolvedExpiryText,
+                        autoSilenceSeconds = autoSilenceSecondsState,
+                        showPostAdhanDua = showPostAdhanDuaState,
+                        onDismiss = { stopAlarm() },
+                        onMute = { muteAlarm() }
+                    )
+                }
+            }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        applyIntentExtras(intent)
+    }
+
+    private fun applyIntentExtras(intent: Intent?) {
+        if (intent == null) return
+        currentNotificationId = intent.getIntExtra(EXTRA_NOTIFICATION_ID, -1)
+        prayerTypeState = intent.getStringExtra(EXTRA_PRAYER_TYPE) ?: "Prayer"
+        subtitleState = intent.getStringExtra(EXTRA_SUBTITLE).orEmpty()
+        autoSilenceSecondsState = intent.getIntExtra(
+            EXTRA_AUTO_SILENCE_SECONDS,
+            PrayerAudioService.DEFAULT_TIMEOUT_SECONDS
+        )
+        showPostAdhanDuaState = intent.getBooleanExtra(EXTRA_SHOW_POST_ADHAN_DUA, true)
+    }
+
+    private fun cancelWakeNotification() {
+        if (currentNotificationId != -1) {
+            runCatching {
+                NotificationManagerCompat.from(this).cancel(currentNotificationId)
             }
         }
     }
@@ -86,6 +123,7 @@ class PrayerWakeActivity : ComponentActivity() {
      * Mutes or stops the currently active prayer audio service and finishes this activity.
      */
     fun stopAlarm() {
+        cancelWakeNotification()
         val stopIntent = Intent(this, PrayerAudioService::class.java).apply {
             action = PrayerAudioService.ACTION_STOP
         }
@@ -123,6 +161,7 @@ class PrayerWakeActivity : ComponentActivity() {
     companion object {
         const val EXTRA_NOTIFICATION_ID = "extra_notification_id"
         const val EXTRA_PRAYER_TYPE = "extra_prayer_type"
+        const val EXTRA_SUBTITLE = "extra_subtitle"
         const val EXTRA_ALERT_TIER = "extra_alert_tier"
         const val EXTRA_AUTO_SILENCE_SECONDS = "extra_auto_silence_seconds"
         const val EXTRA_SHOW_POST_ADHAN_DUA = "extra_show_post_adhan_dua"

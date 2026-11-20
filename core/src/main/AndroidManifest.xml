@@ -59,6 +59,7 @@
                 <action android:name="dev.hayya.alarm.ACTION_RESTORE_RINGER_MODE" />
                 <action android:name="dev.hayya.alarm.ACTION_TRIGGER_SUHOOR_ALARM" />
                 <action android:name="dev.hayya.alarm.ACTION_TRIGGER_EID_NOTIFICATION" />
+                <action android:name="dev.hayya.alarm.ACTION_TRIGGER_TAHAJJUD_ALARM" />
             </intent-filter>
         </receiver>
 
@@ -142,6 +143,34 @@
             <meta-data
                 android:name="android.appwidget.provider"
                 android:resource="@xml/daily_prayers_widget_info" />
+        </receiver>
+
+        <!-- Glance AppWidget: 4x1 Quick Strip Widget -->
+        <receiver
+            android:name=".widget.NextPrayerBannerWidgetReceiver"
+            android:label="@string/widget_banner_name"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="dev.hayya.widget.ACTION_PRAYER_DATA_CHANGED" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/next_prayer_banner_widget_info" />
+        </receiver>
+
+        <!-- Glance AppWidget: 3x2 Night & Fasting Widget -->
+        <receiver
+            android:name=".widget.FastingAndNightWidgetReceiver"
+            android:label="@string/widget_night_fasting_name"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="dev.hayya.widget.ACTION_PRAYER_DATA_CHANGED" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/fasting_night_widget_info" />
         </receiver>
 
         <!-- General Widget Data Sync Receiver -->

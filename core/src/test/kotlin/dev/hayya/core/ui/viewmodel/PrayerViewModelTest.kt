@@ -15,6 +15,7 @@ import dev.hayya.core.domain.model.AutoMuteDuration
 import dev.hayya.core.domain.model.AutoMuteTargetMode
 import dev.hayya.core.domain.model.AutoSilenceTimeout
 import dev.hayya.core.domain.model.CalculationMethodOption
+import dev.hayya.core.domain.model.CityCatalog
 import dev.hayya.core.domain.model.FridayAutoMuteDuration
 import dev.hayya.core.domain.model.MadhabOption
 import dev.hayya.core.domain.model.PrayerType
@@ -176,7 +177,8 @@ class PrayerViewModelTest {
                     preferences = match { it.autoSilenceTimeout == AutoSilenceTimeout.SECONDS_120 },
                     startDate = any(),
                     daysAhead = any(),
-                    currentEpochMillis = any()
+                    currentEpochMillis = any(),
+                    ramadanSettings = any()
                 )
             }
         } finally {
@@ -202,6 +204,15 @@ class PrayerViewModelTest {
     @Test
     fun updateCalculationMethod_synchronizesCanonicalCityAndCoordinates() = runTest(testDispatcher) {
         try {
+            testDispatcher.scheduler.runCurrent()
+
+            // Start from canonical MWL reference city so switching method synchronizes coordinates
+            repository.updateCalculationMethod(CalculationMethodOption.MUSLIM_WORLD_LEAGUE)
+            repository.updateCoordinates(
+                latitude = CalculationMethodOption.MUSLIM_WORLD_LEAGUE.defaultLatitude,
+                longitude = CalculationMethodOption.MUSLIM_WORLD_LEAGUE.defaultLongitude,
+                locationName = CalculationMethodOption.MUSLIM_WORLD_LEAGUE.defaultCity
+            )
             testDispatcher.scheduler.runCurrent()
 
             viewModel.updateCalculationMethod(CalculationMethodOption.KARACHI)
@@ -551,7 +562,8 @@ class PrayerViewModelTest {
                     preferences = match { it.volumeEscalation == VolumeEscalationOption.SECONDS_30 },
                     startDate = any(),
                     daysAhead = any(),
-                    currentEpochMillis = any()
+                    currentEpochMillis = any(),
+                    ramadanSettings = any()
                 )
             }
         } finally {
@@ -579,7 +591,8 @@ class PrayerViewModelTest {
                     preferences = match { it.tahajjudAlarmMinutesOffset == 20 },
                     startDate = any(),
                     daysAhead = any(),
-                    currentEpochMillis = any()
+                    currentEpochMillis = any(),
+                    ramadanSettings = any()
                 )
             }
         } finally {
@@ -725,6 +738,70 @@ class PrayerViewModelTest {
 
             assertThat(repository.userPreferencesFlow.first().fridayAutoMuteDuration)
                 .isEqualTo(FridayAutoMuteDuration.MINUTES_60)
+        } finally {
+            viewModel.viewModelScope.cancel()
+        }
+    }
+
+    @Test
+    fun subPages_salawat_citySelection_andOnboarding_updateStateCleanly() = runTest(testDispatcher) {
+        try {
+            testDispatcher.scheduler.runCurrent()
+
+            viewModel.setTrackerOpen(true)
+            assertThat(viewModel.uiState.value.isTrackerOpen).isTrue()
+
+            viewModel.setTahajjudOpen(true)
+            assertThat(viewModel.uiState.value.isTahajjudOpen).isTrue()
+
+            viewModel.setFridayGuideOpen(true)
+            assertThat(viewModel.uiState.value.isFridayGuideOpen).isTrue()
+
+            viewModel.selectNavTab(AppNavTab.TOOLS)
+            assertThat(viewModel.uiState.value.isTrackerOpen).isFalse()
+            assertThat(viewModel.uiState.value.isTahajjudOpen).isFalse()
+            assertThat(viewModel.uiState.value.isFridayGuideOpen).isFalse()
+
+            viewModel.incrementSalawat()
+            viewModel.incrementSalawat()
+            testDispatcher.scheduler.runCurrent()
+            assertThat(viewModel.uiState.value.salawatCount).isEqualTo(2)
+            assertThat(repository.userPreferencesFlow.first().salawatCount).isEqualTo(2)
+            viewModel.resetSalawat()
+            testDispatcher.scheduler.runCurrent()
+            assertThat(viewModel.uiState.value.salawatCount).isEqualTo(0)
+            assertThat(repository.userPreferencesFlow.first().salawatCount).isEqualTo(0)
+
+            viewModel.incrementTasbih()
+            viewModel.setTasbihMode(dev.hayya.core.domain.tasbih.TasbihTargetMode.TARGET_33)
+            testDispatcher.scheduler.runCurrent()
+            assertThat(repository.userPreferencesFlow.first().tasbihCount).isEqualTo(1)
+            assertThat(repository.userPreferencesFlow.first().tasbihMode)
+                .isEqualTo(dev.hayya.core.domain.tasbih.TasbihTargetMode.TARGET_33)
+
+            val london = CityCatalog.search("London").first()
+            viewModel.selectCity(london)
+            testDispatcher.scheduler.runCurrent()
+            assertThat(viewModel.uiState.value.locationName).isEqualTo(london.displayTitle)
+
+            val larkana = CityCatalog.search("Larkana", district = "Larkana").first()
+            viewModel.selectCity(larkana)
+            testDispatcher.scheduler.runCurrent()
+            assertThat(viewModel.uiState.value.locationName).isEqualTo(larkana.displayTitle)
+            assertThat(viewModel.uiState.value.sehriIhtiyatFormatted).isNotEmpty()
+            assertThat(viewModel.uiState.value.ishraqTimeFormatted).isNotEmpty()
+            assertThat(viewModel.uiState.value.zawalWindowFormatted).isNotEmpty()
+            assertThat(viewModel.uiState.value.mosqueSeasonLabel).isNotEmpty()
+            val fajrRow = viewModel.uiState.value.dailyPrayers.first { it.prayerType == PrayerType.FAJR }
+            assertThat(fajrRow.jamaatTimeFormatted).isNotEmpty()
+
+            viewModel.openOnboarding()
+            assertThat(viewModel.uiState.value.isOnboardingForced).isTrue()
+            viewModel.completeOnboarding()
+            testDispatcher.scheduler.runCurrent()
+            assertThat(viewModel.uiState.value.isOnboardingForced).isFalse()
+            assertThat(repository.userPreferencesFlow.first().hasCompletedOnboarding).isTrue()
+            assertThat(viewModel.uiState.value.isPreferencesLoaded).isTrue()
         } finally {
             viewModel.viewModelScope.cancel()
         }

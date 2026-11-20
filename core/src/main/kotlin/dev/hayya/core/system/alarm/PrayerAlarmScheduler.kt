@@ -8,14 +8,17 @@ import android.os.Build
 import android.util.Log
 import com.batoulapps.adhan.Coordinates
 import dev.hayya.core.data.preferences.UserPreferencesRepository
+import dev.hayya.core.data.ramadan.FastTrackerRepository
 import dev.hayya.core.domain.calculation.PrayerCalculationEngine
 import dev.hayya.core.domain.model.AlertMode
 import dev.hayya.core.domain.model.AlertTier
 import dev.hayya.core.domain.model.PrayerType
 import dev.hayya.core.domain.model.ScheduledAlert
 import dev.hayya.core.domain.model.UserPreferences
+import dev.hayya.core.domain.ramadan.RamadanSettings
 import dev.hayya.core.system.receivers.PrayerAlarmReceiver
 import dev.hayya.core.system.ui.PrayerWakeActivity
+import dev.hayya.core.ui.MainActivity
 import kotlinx.coroutines.flow.first
 import kotlinx.datetime.Clock
 import kotlinx.datetime.DateTimeUnit
@@ -37,6 +40,7 @@ class PrayerAlarmScheduler(
     private val context: Context,
     private val calculationEngine: PrayerCalculationEngine,
     private val preferencesRepository: UserPreferencesRepository? = null,
+    private val fastTrackerRepository: FastTrackerRepository? = null,
     private val alarmManager: AlarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
 ) {
 
@@ -64,10 +68,12 @@ class PrayerAlarmScheduler(
         preferences: UserPreferences? = null,
         startDate: LocalDate? = null,
         daysAhead: Int = 7,
-        currentEpochMillis: Long = Clock.System.now().toEpochMilliseconds()
+        currentEpochMillis: Long = Clock.System.now().toEpochMilliseconds(),
+        ramadanSettings: RamadanSettings? = null
     ): List<ScheduledAlert> {
         val userPrefs = preferences ?: preferencesRepository?.userPreferencesFlow?.first()
             ?: UserPreferences()
+        val resolvedRamadanSettings = ramadanSettings ?: fastTrackerRepository?.observeRamadanSettings()?.first()
 
         val timeZone = TimeZone.currentSystemDefault()
         val effectiveStartDate = startDate ?: Clock.System.now().toLocalDateTime(timeZone).date
@@ -116,24 +122,39 @@ class PrayerAlarmScheduler(
 
         val timeoutSeconds = userPrefs.autoSilenceTimeout.seconds ?: 0
         val escalationSeconds = userPrefs.volumeEscalation.seconds
+        val iftarNotificationEnabled = resolvedRamadanSettings?.iftarNotificationEnabled ?: true
         for (alert in filteredAlerts) {
             scheduleSingleAlert(
                 alert = alert,
                 alertMode = userPrefs.getAlertMode(alert.prayerType),
                 autoSilenceSeconds = timeoutSeconds,
                 showPostAdhanDua = userPrefs.showPostAdhanDua,
-                volumeEscalationSeconds = escalationSeconds
+                volumeEscalationSeconds = escalationSeconds,
+                iftarNotificationEnabled = iftarNotificationEnabled
             )
         }
 
-        // Schedule or cancel gentle Tahajjud pre-alarm
-        if (userPrefs.tahajjudAlarmEnabled) {
-            val todayDailyTimes = calculationEngine.computeDailyTimes(
+        val needsTodayDailyTimes = userPrefs.tahajjudAlarmEnabled || (resolvedRamadanSettings?.suhoorAlarmEnabled == true)
+        val todayDailyTimes = if (needsTodayDailyTimes) {
+            calculationEngine.computeDailyTimes(
                 date = effectiveStartDate,
                 coordinates = coordinates,
                 parameters = parameters,
                 manualOffsets = userPrefs.manualMinuteOffsets
             )
+        } else null
+        var tomorrowDailyTimes: dev.hayya.core.domain.calculation.DailyPrayerTimes? = null
+        fun getTomorrowDailyTimes(): dev.hayya.core.domain.calculation.DailyPrayerTimes {
+            return tomorrowDailyTimes ?: calculationEngine.computeDailyTimes(
+                date = effectiveStartDate.plus(1, DateTimeUnit.DAY),
+                coordinates = coordinates,
+                parameters = parameters,
+                manualOffsets = userPrefs.manualMinuteOffsets
+            ).also { tomorrowDailyTimes = it }
+        }
+
+        // Schedule or cancel gentle Tahajjud pre-alarm
+        if (userPrefs.tahajjudAlarmEnabled && todayDailyTimes != null) {
             val tahajjudSchedule = dev.hayya.core.domain.calculation.NightFastingCalculator.resolveTahajjudSchedule(
                 dailyTimes = todayDailyTimes,
                 nowEpochMillis = currentEpochMillis
@@ -142,14 +163,8 @@ class PrayerAlarmScheduler(
             if (trigger > currentEpochMillis) {
                 scheduleTahajjudAlarm(trigger)
             } else {
-                val tomorrowDailyTimes = calculationEngine.computeDailyTimes(
-                    date = effectiveStartDate.plus(1, DateTimeUnit.DAY),
-                    coordinates = coordinates,
-                    parameters = parameters,
-                    manualOffsets = userPrefs.manualMinuteOffsets
-                )
                 val nextTahajjud = dev.hayya.core.domain.calculation.NightFastingCalculator.resolveTahajjudSchedule(
-                    dailyTimes = tomorrowDailyTimes,
+                    dailyTimes = getTomorrowDailyTimes(),
                     nowEpochMillis = currentEpochMillis
                 )
                 val nextTrigger = nextTahajjud.lastThirdStartEpochMillis + (userPrefs.tahajjudAlarmMinutesOffset * 60_000L)
@@ -159,6 +174,39 @@ class PrayerAlarmScheduler(
             }
         } else {
             cancelTahajjudAlarm()
+        }
+
+        // Schedule or cancel repeating Suhoor wake-up alarm
+        if (resolvedRamadanSettings != null) {
+            if (resolvedRamadanSettings.suhoorAlarmEnabled && todayDailyTimes != null) {
+                val offsetMillis = resolvedRamadanSettings.suhoorAlarmMinutesBefore.coerceAtLeast(1) * 60_000L
+                val todaySuhoorTrigger = todayDailyTimes.fajr - offsetMillis
+                if (todaySuhoorTrigger > currentEpochMillis) {
+                    scheduleSuhoorAlarm(
+                        triggerEpochMillis = todaySuhoorTrigger,
+                        fajrEpochMillis = todayDailyTimes.fajr,
+                        autoSilenceSeconds = timeoutSeconds,
+                        volumeEscalationSeconds = escalationSeconds
+                    )
+                } else {
+                    val nextTimes = getTomorrowDailyTimes()
+                    val tomorrowSuhoorTrigger = nextTimes.fajr - offsetMillis
+                    if (tomorrowSuhoorTrigger > currentEpochMillis) {
+                        scheduleSuhoorAlarm(
+                            triggerEpochMillis = tomorrowSuhoorTrigger,
+                            fajrEpochMillis = nextTimes.fajr,
+                            autoSilenceSeconds = timeoutSeconds,
+                            volumeEscalationSeconds = escalationSeconds
+                        )
+                    }
+                }
+            } else {
+                cancelSuhoorAlarm()
+            }
+
+            // Eid auto-alerts are deprecated for V1 (moon-sighting dates vary regionally)
+            @Suppress("DEPRECATION")
+            cancelEidCelebration()
         }
 
         Log.i(
@@ -180,7 +228,8 @@ class PrayerAlarmScheduler(
         alertMode: AlertMode = AlertMode.FULL_ALARM,
         autoSilenceSeconds: Int = 60,
         showPostAdhanDua: Boolean = true,
-        volumeEscalationSeconds: Int = 0
+        volumeEscalationSeconds: Int = 0,
+        iftarNotificationEnabled: Boolean = true
     ) {
         val requestCode = alert.notificationId
 
@@ -193,6 +242,7 @@ class PrayerAlarmScheduler(
             putExtra(EXTRA_ALERT_MODE, alertMode.name)
             putExtra(EXTRA_AUTO_SILENCE_SECONDS, autoSilenceSeconds)
             putExtra(EXTRA_VOLUME_ESCALATION_SECONDS, volumeEscalationSeconds)
+            putExtra(EXTRA_IFTAR_NOTIFICATION_ENABLED, iftarNotificationEnabled)
             putExtra(PrayerWakeActivity.EXTRA_SHOW_POST_ADHAN_DUA, showPostAdhanDua)
         }
 
@@ -355,7 +405,10 @@ class PrayerAlarmScheduler(
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-        val alarmClockInfo = AlarmManager.AlarmClockInfo(triggerEpochMillis, pendingIntent)
+        val alarmClockInfo = AlarmManager.AlarmClockInfo(
+            triggerEpochMillis,
+            createMainActivityShowIntent(NOTIFICATION_ID_AUTO_UNMUTE)
+        )
         try {
             alarmManager.setAlarmClock(alarmClockInfo, pendingIntent)
             Log.i(TAG, "Scheduled auto-unmute alarm for $triggerEpochMillis")
@@ -387,11 +440,18 @@ class PrayerAlarmScheduler(
     /**
      * Schedules an exact pre-Suhoor wake-up alarm before Fajr dawn.
      */
-    fun scheduleSuhoorAlarm(triggerEpochMillis: Long, fajrEpochMillis: Long) {
+    fun scheduleSuhoorAlarm(
+        triggerEpochMillis: Long,
+        fajrEpochMillis: Long,
+        autoSilenceSeconds: Int = 60,
+        volumeEscalationSeconds: Int = 0
+    ) {
         val intent = Intent(context, PrayerAlarmReceiver::class.java).apply {
             action = ACTION_TRIGGER_SUHOOR_ALARM
             putExtra(EXTRA_TRIGGER_MILLIS, triggerEpochMillis)
             putExtra(EXTRA_FAJR_MILLIS, fajrEpochMillis)
+            putExtra(EXTRA_AUTO_SILENCE_SECONDS, autoSilenceSeconds)
+            putExtra(EXTRA_VOLUME_ESCALATION_SECONDS, volumeEscalationSeconds)
         }
         val pendingIntent = PendingIntent.getBroadcast(
             context,
@@ -399,7 +459,10 @@ class PrayerAlarmScheduler(
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-        val alarmClockInfo = AlarmManager.AlarmClockInfo(triggerEpochMillis, pendingIntent)
+        val alarmClockInfo = AlarmManager.AlarmClockInfo(
+            triggerEpochMillis,
+            createMainActivityShowIntent(NOTIFICATION_ID_SUHOOR)
+        )
         try {
             alarmManager.setAlarmClock(alarmClockInfo, pendingIntent)
             Log.i(TAG, "Scheduled Suhoor alarm for $triggerEpochMillis")
@@ -441,7 +504,10 @@ class PrayerAlarmScheduler(
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-        val alarmClockInfo = AlarmManager.AlarmClockInfo(triggerEpochMillis, pendingIntent)
+        val alarmClockInfo = AlarmManager.AlarmClockInfo(
+            triggerEpochMillis,
+            createMainActivityShowIntent(NOTIFICATION_ID_TAHAJJUD)
+        )
         try {
             alarmManager.setAlarmClock(alarmClockInfo, pendingIntent)
             Log.i(TAG, "Scheduled gentle Tahajjud pre-alarm for $triggerEpochMillis")
@@ -473,6 +539,7 @@ class PrayerAlarmScheduler(
     /**
      * Schedules a celebratory Eid morning notification.
      */
+    @Deprecated("Eid auto-notifications are deferred to a future dedicated Eid screen.")
     fun scheduleEidCelebration(triggerEpochMillis: Long, eidTitle: String, eidMessage: String) {
         val intent = Intent(context, PrayerAlarmReceiver::class.java).apply {
             action = ACTION_TRIGGER_EID_NOTIFICATION
@@ -485,13 +552,49 @@ class PrayerAlarmScheduler(
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-        val alarmClockInfo = AlarmManager.AlarmClockInfo(triggerEpochMillis, pendingIntent)
+        val alarmClockInfo = AlarmManager.AlarmClockInfo(
+            triggerEpochMillis,
+            createMainActivityShowIntent(NOTIFICATION_ID_EID)
+        )
         try {
             alarmManager.setAlarmClock(alarmClockInfo, pendingIntent)
             Log.i(TAG, "Scheduled Eid celebration alert for $triggerEpochMillis")
         } catch (se: SecurityException) {
             Log.e(TAG, "SecurityException scheduling Eid alarm", se)
         }
+    }
+
+    /**
+     * Cancels any pending Eid celebration notification.
+     */
+    @Deprecated("Eid auto-notifications are deferred to a future dedicated Eid screen.")
+    fun cancelEidCelebration() {
+        val intent = Intent(context, PrayerAlarmReceiver::class.java).apply {
+            action = ACTION_TRIGGER_EID_NOTIFICATION
+        }
+        val pendingIntent = PendingIntent.getBroadcast(
+            context,
+            NOTIFICATION_ID_EID,
+            intent,
+            PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE
+        )
+        if (pendingIntent != null) {
+            alarmManager.cancel(pendingIntent)
+            pendingIntent.cancel()
+            Log.i(TAG, "Cancelled pending Eid celebration alert")
+        }
+    }
+
+    private fun createMainActivityShowIntent(requestCode: Int): PendingIntent {
+        val showIntent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        }
+        return PendingIntent.getActivity(
+            context,
+            requestCode,
+            showIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
     }
 
     companion object {
@@ -516,6 +619,7 @@ class PrayerAlarmScheduler(
         const val EXTRA_ALERT_MODE = "extra_alert_mode"
         const val EXTRA_AUTO_SILENCE_SECONDS = "extra_auto_silence_seconds"
         const val EXTRA_VOLUME_ESCALATION_SECONDS = "extra_volume_escalation_seconds"
+        const val EXTRA_IFTAR_NOTIFICATION_ENABLED = "extra_iftar_notification_enabled"
         const val EXTRA_FAJR_MILLIS = "extra_fajr_millis"
         const val EXTRA_EID_TITLE = "extra_eid_title"
         const val EXTRA_EID_MESSAGE = "extra_eid_message"

@@ -2,7 +2,6 @@ package dev.hayya.core.ui.components
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -13,7 +12,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -40,13 +38,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 /**
- * Top-level application destinations accessible via the modern floating navbar.
+ * Top-level application destinations accessible via the floating navigation dock.
  */
 enum class AppNavTab(val label: String) {
     DASHBOARD("Prayers"),
@@ -55,8 +53,8 @@ enum class AppNavTab(val label: String) {
 }
 
 /**
- * Modern floating pill navigation bar docked elegantly above the bottom system insets.
- * Features Material 3 color harmony, tactile feedback, and adaptive indicator expansion.
+ * Polished floating pill navigation dock with equal-width single-line tabs
+ * so icons and labels never wrap or clip on any screen width.
  */
 @Composable
 fun FloatingNavBar(
@@ -68,33 +66,35 @@ fun FloatingNavBar(
         modifier = modifier
             .fillMaxWidth()
             .navigationBarsPadding()
-            .padding(horizontal = 24.dp, vertical = 12.dp),
+            .padding(horizontal = 14.dp, vertical = 12.dp),
         contentAlignment = Alignment.Center
     ) {
         Surface(
             modifier = Modifier
-                .height(54.dp)
+                .fillMaxWidth()
+                .height(58.dp)
                 .shadow(
-                    elevation = 6.dp,
+                    elevation = 10.dp,
                     shape = CircleShape,
-                    spotColor = Color(0x40000000),
-                    ambientColor = Color(0x20000000)
+                    spotColor = Color(0x50000000),
+                    ambientColor = Color(0x28000000)
                 ),
             shape = CircleShape,
-            color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.95f),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.20f)),
-            tonalElevation = 0.dp
+            color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.97f),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
+            tonalElevation = 2.dp
         ) {
             Row(
                 modifier = Modifier
+                    .fillMaxWidth()
                     .padding(horizontal = 6.dp, vertical = 5.dp),
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 val tabs = listOf(
-                    Triple(AppNavTab.DASHBOARD, "Prayers", Icons.Outlined.AccessTime to Icons.Filled.AccessTime),
-                    Triple(AppNavTab.TOOLS, "Companion", Icons.Outlined.Explore to Icons.Filled.Explore),
-                    Triple(AppNavTab.SETTINGS, "Settings", Icons.Outlined.Settings to Icons.Filled.Settings)
+                    Triple(AppNavTab.DASHBOARD, AppNavTab.DASHBOARD.label, Icons.Outlined.AccessTime to Icons.Filled.AccessTime),
+                    Triple(AppNavTab.TOOLS, AppNavTab.TOOLS.label, Icons.Outlined.Explore to Icons.Filled.Explore),
+                    Triple(AppNavTab.SETTINGS, AppNavTab.SETTINGS.label, Icons.Outlined.Settings to Icons.Filled.Settings)
                 )
 
                 tabs.forEach { (tab, title, icons) ->
@@ -102,25 +102,28 @@ fun FloatingNavBar(
                     val (unselectedIcon, selectedIcon) = icons
 
                     val pillBgColor by animateColorAsState(
-                        targetValue = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.14f) else Color.Transparent,
+                        targetValue = if (selected) {
+                            MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)
+                        } else {
+                            Color.Transparent
+                        },
                         animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
                         label = "pill_bg_color"
                     )
 
                     val contentColor by animateColorAsState(
-                        targetValue = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        targetValue = if (selected) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
                         animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
                         label = "pill_content_color"
                     )
 
-                    val pillPaddingHorizontal by animateDpAsState(
-                        targetValue = if (selected) 16.dp else 12.dp,
-                        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
-                        label = "pill_padding"
-                    )
-
                     Box(
                         modifier = Modifier
+                            .weight(1f)
                             .fillMaxHeight()
                             .clip(CircleShape)
                             .background(pillBgColor)
@@ -128,7 +131,7 @@ fun FloatingNavBar(
                                 interactionSource = remember { MutableInteractionSource() },
                                 indication = null
                             ) { onTabSelected(tab) }
-                            .padding(horizontal = pillPaddingHorizontal),
+                            .padding(horizontal = 6.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Row(
@@ -139,20 +142,20 @@ fun FloatingNavBar(
                                 imageVector = if (selected) selectedIcon else unselectedIcon,
                                 contentDescription = title,
                                 tint = contentColor,
-                                modifier = Modifier.size(19.dp)
+                                modifier = Modifier.size(18.dp)
                             )
-                            if (selected) {
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    text = title,
-                                    style = MaterialTheme.typography.labelMedium.copy(
-                                        fontWeight = FontWeight.SemiBold,
-                                        fontSize = 12.sp,
-                                        letterSpacing = 0.4.sp,
-                                        color = contentColor
-                                    )
+                            Spacer(modifier = Modifier.width(5.dp))
+                            Text(
+                                text = title,
+                                maxLines = 1,
+                                softWrap = false,
+                                overflow = TextOverflow.Ellipsis,
+                                style = MaterialTheme.typography.labelMedium.copy(
+                                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                                    fontSize = 12.sp,
+                                    color = contentColor
                                 )
-                            }
+                            )
                         }
                     }
                 }

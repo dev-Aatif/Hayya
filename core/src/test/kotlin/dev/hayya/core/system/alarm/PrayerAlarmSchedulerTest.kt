@@ -13,9 +13,11 @@ import dev.hayya.core.domain.model.AutoSilenceTimeout
 import dev.hayya.core.domain.model.PrayerType
 import dev.hayya.core.domain.model.ScheduledAlert
 import dev.hayya.core.domain.model.UserPreferences
+import dev.hayya.core.domain.ramadan.RamadanSettings
 import io.mockk.*
 import kotlinx.coroutines.test.runTest
 import kotlinx.datetime.LocalDate
+import java.time.chrono.HijrahChronology
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -397,6 +399,73 @@ class PrayerAlarmSchedulerTest {
         } returns mockPendingIntent
 
         scheduler.cancelTahajjudAlarm()
+
+        verify(exactly = 1) {
+            alarmManager.cancel(mockPendingIntent)
+            mockPendingIntent.cancel()
+        }
+    }
+
+    @Test
+    fun scheduleAutoUnmute_usesActivityPendingIntentForShowIntent() {
+        val triggerEpoch = System.currentTimeMillis() + 900_000L
+        val activityShowIntent = mockk<PendingIntent>(relaxed = true)
+        val alarmClockInfoSlot = slot<AlarmManager.AlarmClockInfo>()
+
+        every {
+            PendingIntent.getActivity(
+                context,
+                PrayerAlarmScheduler.NOTIFICATION_ID_AUTO_UNMUTE,
+                any(),
+                any()
+            )
+        } returns activityShowIntent
+        every { alarmManager.setAlarmClock(capture(alarmClockInfoSlot), any()) } returns Unit
+
+        scheduler.scheduleAutoUnmute(triggerEpoch)
+
+        assertThat(alarmClockInfoSlot.captured.showIntent).isEqualTo(activityShowIntent)
+    }
+
+    @Test
+    fun scheduleRollingAlarms_withRamadanSettings_schedulesSuhoorAndSkipsDeprecatedEid() = runTest {
+        val eidHijri = HijrahChronology.INSTANCE.date(1447, 10, 1)
+        val eidGregorian = java.time.LocalDate.from(eidHijri)
+        val eidDate = LocalDate(eidGregorian.year, eidGregorian.monthValue, eidGregorian.dayOfMonth)
+        val ramadanSettings = RamadanSettings(
+            suhoorAlarmEnabled = true,
+            suhoorAlarmMinutesBefore = 40,
+            iftarNotificationEnabled = true,
+            eidNotificationEnabled = true
+        )
+
+        scheduler.scheduleRollingAlarms(
+            preferences = UserPreferences(preReminderEnabled = false, lastCallEnabled = false),
+            startDate = eidDate,
+            daysAhead = 1,
+            currentEpochMillis = 0L,
+            ramadanSettings = ramadanSettings
+        )
+
+        // 5 prayer main calls + 1 Suhoor = 6 setAlarmClock calls (Eid auto-scheduling is deprecated for V1)
+        verify(exactly = 6) {
+            alarmManager.setAlarmClock(any(), any())
+        }
+    }
+
+    @Test
+    fun cancelEidCelebration_cancelsPendingIntentWhenPresent() {
+        val mockPendingIntent = mockk<PendingIntent>(relaxed = true)
+        every {
+            PendingIntent.getBroadcast(
+                context,
+                PrayerAlarmScheduler.NOTIFICATION_ID_EID,
+                any<Intent>(),
+                PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE
+            )
+        } returns mockPendingIntent
+
+        scheduler.cancelEidCelebration()
 
         verify(exactly = 1) {
             alarmManager.cancel(mockPendingIntent)

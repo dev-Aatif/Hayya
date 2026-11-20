@@ -37,7 +37,12 @@ class HayyaApplication : Application() {
         preferencesRepository = UserPreferencesRepository(dataStore)
         prayerLogRepository = PrayerLogRepository(dataStore)
         fastTrackerRepository = FastTrackerRepository(dataStore)
-        alarmScheduler = PrayerAlarmScheduler(this, calculationEngine, preferencesRepository)
+        alarmScheduler = PrayerAlarmScheduler(
+            context = this,
+            calculationEngine = calculationEngine,
+            preferencesRepository = preferencesRepository,
+            fastTrackerRepository = fastTrackerRepository
+        )
     }
 
     companion object {

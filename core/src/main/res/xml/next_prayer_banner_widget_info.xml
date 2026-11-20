@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="250dp"
+    android:minHeight="48dp"
+    android:targetCellWidth="4"
+    android:targetCellHeight="1"
+    android:updatePeriodMillis="1800000"
+    android:description="@string/widget_banner_description"
+    android:initialLayout="@layout/widget_loading_layout"
+    android:previewLayout="@layout/next_prayer_banner_widget_preview"
+    android:resizeMode="horizontal"
+    android:widgetCategory="home_screen" />

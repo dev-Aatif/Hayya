@@ -14,7 +14,9 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
+import dev.hayya.core.R
 import dev.hayya.core.data.preferences.UserPreferencesRepository
+import dev.hayya.core.data.ramadan.FastTrackerRepository
 import dev.hayya.core.domain.calculation.PrayerCalculationEngine
 import dev.hayya.core.domain.model.AlertMode
 import dev.hayya.core.domain.model.AlertTier
@@ -87,39 +89,89 @@ class PrayerAlarmReceiver : BroadcastReceiver() {
             val powerManager = context.getSystemService(Context.POWER_SERVICE) as PowerManager
             val wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, WAKELOCK_TAG).apply {
                 setReferenceCounted(false)
-                acquire(5_000L)
+                acquire(10_000L)
             }
             try {
                 ensureNotificationChannels(context)
                 val fajrMillis = intent.getLongExtra(PrayerAlarmScheduler.EXTRA_FAJR_MILLIS, 0L)
+                val autoSilenceSeconds = intent.getIntExtra(
+                    PrayerAlarmScheduler.EXTRA_AUTO_SILENCE_SECONDS,
+                    PrayerAudioService.DEFAULT_TIMEOUT_SECONDS
+                )
+                val volumeEscalationSeconds = intent.getIntExtra(
+                    PrayerAlarmScheduler.EXTRA_VOLUME_ESCALATION_SECONDS,
+                    0
+                )
                 val timeStr = if (fajrMillis > 0) {
                     val sdf = SimpleDateFormat("h:mm a", Locale.getDefault())
                     sdf.format(Date(fajrMillis))
                 } else "Fajr"
+                val suhoorSubtitle = "Eat Suhoor & make Niyyah before Fajr ($timeStr)"
 
-                val mainIntent = Intent(context, MainActivity::class.java).apply {
-                    flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                val fullScreenIntent = Intent(context, PrayerWakeActivity::class.java).apply {
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                    putExtra(PrayerWakeActivity.EXTRA_NOTIFICATION_ID, PrayerAlarmScheduler.NOTIFICATION_ID_SUHOOR)
+                    putExtra(PrayerWakeActivity.EXTRA_PRAYER_TYPE, "SUHOOR")
+                    putExtra(PrayerWakeActivity.EXTRA_SUBTITLE, suhoorSubtitle)
+                    putExtra(PrayerWakeActivity.EXTRA_ALERT_TIER, AlertTier.MAIN_CALL.name)
+                    putExtra(PrayerWakeActivity.EXTRA_AUTO_SILENCE_SECONDS, autoSilenceSeconds)
+                    putExtra(PrayerWakeActivity.EXTRA_SHOW_POST_ADHAN_DUA, false)
                 }
-                val pi = PendingIntent.getActivity(
+                val fullScreenPendingIntent = PendingIntent.getActivity(
                     context,
                     PrayerAlarmScheduler.NOTIFICATION_ID_SUHOOR,
-                    mainIntent,
+                    fullScreenIntent,
                     PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                 )
 
+                val serviceIntent = Intent(context, PrayerAudioService::class.java).apply {
+                    action = PrayerAudioService.ACTION_START_ALARM
+                    putExtra(PrayerAudioService.EXTRA_NOTIFICATION_ID, PrayerAlarmScheduler.NOTIFICATION_ID_SUHOOR)
+                    putExtra(PrayerAudioService.EXTRA_PRAYER_NAME, "Suhoor")
+                    putExtra(PrayerAudioService.EXTRA_TIMEOUT_SECONDS, autoSilenceSeconds)
+                    putExtra(PrayerAudioService.EXTRA_VOLUME_ESCALATION_SECONDS, volumeEscalationSeconds)
+                }
+                ContextCompat.startForegroundService(context, serviceIntent)
+
                 val notification = NotificationCompat.Builder(context, CHANNEL_SUHOOR_REMINDER)
-                    .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
-                    .setContentTitle("🍽️ Suhoor Wake-Up Reminder")
+                    .setSmallIcon(R.drawable.ic_stat_hayya)
+                    .setContentTitle("🍽️ Suhoor Wake-Up Alarm")
                     .setContentText("Eat Suhoor & make Niyyah. Fasting begins at Fajr ($timeStr).")
                     .setStyle(NotificationCompat.BigTextStyle().bigText("Eat Suhoor and hydrate before Fajr ($timeStr).\nIntention (Niyyah): 'Wa bisawmi ghadin nawaytu min shahri Ramadan'."))
-                    .setContentIntent(pi)
-                    .setPriority(NotificationCompat.PRIORITY_HIGH)
+                    .setFullScreenIntent(fullScreenPendingIntent, true)
+                    .setContentIntent(fullScreenPendingIntent)
+                    .setPriority(NotificationCompat.PRIORITY_MAX)
                     .setCategory(NotificationCompat.CATEGORY_ALARM)
+                    .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+                    .setSilent(true)
                     .setAutoCancel(true)
                     .build()
 
                 NotificationManagerCompat.from(context).notify(PrayerAlarmScheduler.NOTIFICATION_ID_SUHOOR, notification)
-            } finally {
+
+                try {
+                    context.startActivity(fullScreenIntent)
+                } catch (e: Exception) {
+                    Log.d(TAG, "Direct Suhoor wake launch deferred to fullScreenIntent: ${e.message}")
+                }
+
+                CoroutineScope(Dispatchers.Default + SupervisorJob()).launch {
+                    try {
+                        val dataStore = PreferenceDataStoreProvider.getDataStore(context)
+                        val repository = UserPreferencesRepository(dataStore)
+                        val fastTrackerRepository = FastTrackerRepository(dataStore)
+                        val engine = PrayerCalculationEngine()
+                        val scheduler = PrayerAlarmScheduler(context, engine, repository, fastTrackerRepository)
+                        scheduler.scheduleRollingAlarms()
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error rescheduling next Suhoor alarm", e)
+                    } finally {
+                        if (wakeLock.isHeld) wakeLock.release()
+                        pendingResult?.finish()
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error handling Suhoor alarm", e)
                 if (wakeLock.isHeld) wakeLock.release()
                 pendingResult?.finish()
             }
@@ -150,7 +202,7 @@ class PrayerAlarmReceiver : BroadcastReceiver() {
                 )
 
                 val notification = NotificationCompat.Builder(context, CHANNEL_EID_CELEBRATION)
-                    .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
+                    .setSmallIcon(R.drawable.ic_stat_hayya)
                     .setContentTitle(title)
                     .setContentText(message)
                     .setStyle(NotificationCompat.BigTextStyle().bigText("$message\n\nاللَّهُ أَكْبَرُ اللَّهُ أَكْبَرُ لَا إِلَهَ إِلَّا اللَّهُ، وَاللَّهُ أَكْبَرُ اللَّهُ أَكْبَرُ وَلِلَّهِ الْحَمْدُ"))
@@ -187,7 +239,7 @@ class PrayerAlarmReceiver : BroadcastReceiver() {
                 )
 
                 val notification = NotificationCompat.Builder(context, CHANNEL_TAHAJJUD_REMINDER)
-                    .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
+                    .setSmallIcon(R.drawable.ic_stat_hayya)
                     .setContentTitle("Qiyam al-Layl — Tahajjud")
                     .setContentText("The Last Third of the Night has begun (Thuluth al-Akhir).")
                     .setStyle(NotificationCompat.BigTextStyle().bigText("The Last Third of the Night has begun.\n'Our Lord descends to the lowest heaven when the last third of the night remains...' (Sahih al-Bukhari 1145)"))
@@ -203,14 +255,19 @@ class PrayerAlarmReceiver : BroadcastReceiver() {
                     try {
                         val dataStore = PreferenceDataStoreProvider.getDataStore(context)
                         val repository = UserPreferencesRepository(dataStore)
+                        val fastTrackerRepository = FastTrackerRepository(dataStore)
                         val engine = PrayerCalculationEngine()
-                        val scheduler = PrayerAlarmScheduler(context, engine, repository)
+                        val scheduler = PrayerAlarmScheduler(context, engine, repository, fastTrackerRepository)
                         scheduler.scheduleRollingAlarms()
                     } catch (e: Exception) {
                         Log.e(TAG, "Error in post-Tahajjud alarm reschedule", e)
+                    } finally {
+                        if (wakeLock.isHeld) wakeLock.release()
+                        pendingResult?.finish()
                     }
                 }
-            } finally {
+            } catch (e: Exception) {
+                Log.e(TAG, "Error handling Tahajjud alarm", e)
                 if (wakeLock.isHeld) wakeLock.release()
                 pendingResult?.finish()
             }
@@ -247,6 +304,10 @@ class PrayerAlarmReceiver : BroadcastReceiver() {
                 PrayerWakeActivity.EXTRA_SHOW_POST_ADHAN_DUA,
                 true
             )
+            val iftarNotificationEnabled = intent.getBooleanExtra(
+                PrayerAlarmScheduler.EXTRA_IFTAR_NOTIFICATION_ENABLED,
+                true
+            )
 
             val prayerType = prayerTypeName?.let {
                 runCatching { PrayerType.valueOf(it) }.getOrNull()
@@ -269,9 +330,17 @@ class PrayerAlarmReceiver : BroadcastReceiver() {
                     }
                     AlertTier.MAIN_CALL -> {
                         if (alertMode == AlertMode.GENTLE_BANNER) {
-                            handleGentleMainCall(context, notificationId, prayerType)
+                            handleGentleMainCall(context, notificationId, prayerType, iftarNotificationEnabled)
                         } else {
-                            handleMainCall(context, notificationId, prayerType, autoSilenceSeconds, showPostAdhanDua, volumeEscalationSeconds)
+                            handleMainCall(
+                                context = context,
+                                notificationId = notificationId,
+                                prayerType = prayerType,
+                                autoSilenceSeconds = autoSilenceSeconds,
+                                showPostAdhanDua = showPostAdhanDua,
+                                volumeEscalationSeconds = volumeEscalationSeconds,
+                                iftarNotificationEnabled = iftarNotificationEnabled
+                            )
                         }
                     }
                     AlertTier.LAST_CALL -> {
@@ -280,17 +349,30 @@ class PrayerAlarmReceiver : BroadcastReceiver() {
                 }
             }
 
-            // Refresh Glance AppWidgets, pinned status, and extend the 7-day rolling queue
+            // Refresh Glance AppWidgets, pinned status, auto-mute, and extend the 7-day rolling queue
+            // inside the single WakeLock/goAsync()-guarded coroutine so Doze cannot interrupt them.
+            val isFridayJumuah = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault())
+                .date.dayOfWeek == DayOfWeek.FRIDAY && prayerType == PrayerType.DHUHR
+            val shouldActivateAutoMute = alertMode == AlertMode.FULL_ALARM && alertTier == AlertTier.MAIN_CALL
+
             CoroutineScope(Dispatchers.Default + SupervisorJob()).launch {
                 try {
                     dev.hayya.core.widget.PrayerWidgetUpdater.updateAllWidgets(context)
                     PinnedPrayerStatusService.refreshIfRunning(context)
-                    if (alertTier == AlertTier.MAIN_CALL) {
+
+                    if (shouldActivateAutoMute || alertTier == AlertTier.MAIN_CALL) {
                         val dataStore = PreferenceDataStoreProvider.getDataStore(context)
                         val repository = UserPreferencesRepository(dataStore)
+                        val fastTrackerRepository = FastTrackerRepository(dataStore)
                         val engine = PrayerCalculationEngine()
-                        val scheduler = PrayerAlarmScheduler(context, engine, repository)
-                        scheduler.scheduleRollingAlarms()
+                        val scheduler = PrayerAlarmScheduler(context, engine, repository, fastTrackerRepository)
+
+                        if (shouldActivateAutoMute) {
+                            activatePrayerAutoMuteIfConfigured(context, repository, scheduler, isFridayJumuah)
+                        }
+                        if (alertTier == AlertTier.MAIN_CALL) {
+                            scheduler.scheduleRollingAlarms()
+                        }
                     }
                 } catch (e: Exception) {
                     Log.e(TAG, "Error in post-alarm background refresh", e)
@@ -318,7 +400,7 @@ class PrayerAlarmReceiver : BroadcastReceiver() {
         val message = "The window for $displayName begins shortly. Prepare for prayer."
 
         val notification = NotificationCompat.Builder(context, CHANNEL_PRE_REMINDER)
-            .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
+            .setSmallIcon(R.drawable.ic_stat_hayya)
             .setContentTitle(title)
             .setContentText(message)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
@@ -339,7 +421,7 @@ class PrayerAlarmReceiver : BroadcastReceiver() {
         val message = "20 minutes remaining before $displayName expires at $nextMilestone."
 
         val notification = NotificationCompat.Builder(context, CHANNEL_LAST_CALL)
-            .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
+            .setSmallIcon(R.drawable.ic_stat_hayya)
             .setContentTitle(title)
             .setContentText(message)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
@@ -351,17 +433,30 @@ class PrayerAlarmReceiver : BroadcastReceiver() {
         NotificationManagerCompat.from(context).notify(notificationId, notification)
     }
 
-    private fun handleGentleMainCall(context: Context, notificationId: Int, prayerType: PrayerType) {
+    private fun handleGentleMainCall(
+        context: Context,
+        notificationId: Int,
+        prayerType: PrayerType,
+        iftarNotificationEnabled: Boolean = true
+    ) {
         val today = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
         val isFriday = today.dayOfWeek == DayOfWeek.FRIDAY
         val displayName = prayerType.displayName(isFriday)
-        val title = "Time for $displayName"
-        val message = "The prayer window for $displayName has begun."
+        val islamicDate = IslamicCalendarHelper.resolveIslamicDate(today)
+        val isIftarAlert = prayerType == PrayerType.MAGHRIB && islamicDate.isRamadan && iftarNotificationEnabled
+
+        val title = if (isIftarAlert) "🌙 Iftar Mubarak — Break Your Fast" else "Time for $displayName"
+        val message = if (isIftarAlert) {
+            "ذَهَبَ الظَّمَأُ وَابْتَلَّتِ الْعُرُوقُ وَثَبَتَ الأَجْرُ إِنْ شَاءَ اللَّهُ • Time to break your fast"
+        } else {
+            "The prayer window for $displayName has begun."
+        }
 
         val notification = NotificationCompat.Builder(context, CHANNEL_GENTLE_MAIN_CALL)
-            .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
+            .setSmallIcon(R.drawable.ic_stat_hayya)
             .setContentTitle(title)
             .setContentText(message)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(message))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
@@ -378,12 +473,14 @@ class PrayerAlarmReceiver : BroadcastReceiver() {
         prayerType: PrayerType,
         autoSilenceSeconds: Int,
         showPostAdhanDua: Boolean = true,
-        volumeEscalationSeconds: Int = 0
+        volumeEscalationSeconds: Int = 0,
+        iftarNotificationEnabled: Boolean = true
     ) {
         val today = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
         val isFriday = today.dayOfWeek == DayOfWeek.FRIDAY
         val isFridayJumuah = isFriday && prayerType == PrayerType.DHUHR
         val displayName = prayerType.displayName(isFriday)
+        val servicePrayerName = if (isFridayJumuah) "JUMU'AH" else prayerType.name
 
         // Build FullScreenIntent for lockscreen wake
         val fullScreenIntent = Intent(context, PrayerWakeActivity::class.java).apply {
@@ -406,7 +503,7 @@ class PrayerAlarmReceiver : BroadcastReceiver() {
         val serviceIntent = Intent(context, PrayerAudioService::class.java).apply {
             action = PrayerAudioService.ACTION_START_ALARM
             putExtra(PrayerAudioService.EXTRA_NOTIFICATION_ID, notificationId)
-            putExtra(PrayerAudioService.EXTRA_PRAYER_NAME, prayerType.name)
+            putExtra(PrayerAudioService.EXTRA_PRAYER_NAME, servicePrayerName)
             putExtra(PrayerAudioService.EXTRA_TIMEOUT_SECONDS, autoSilenceSeconds)
             putExtra(PrayerAudioService.EXTRA_VOLUME_ESCALATION_SECONDS, volumeEscalationSeconds)
         }
@@ -414,7 +511,7 @@ class PrayerAlarmReceiver : BroadcastReceiver() {
         ContextCompat.startForegroundService(context, serviceIntent)
 
         val islamicDate = IslamicCalendarHelper.resolveIslamicDate(today)
-        val isIftarAlert = prayerType == PrayerType.MAGHRIB && islamicDate.isRamadan
+        val isIftarAlert = prayerType == PrayerType.MAGHRIB && islamicDate.isRamadan && iftarNotificationEnabled
 
         val notificationTitle = if (isIftarAlert) {
             "🌙 Iftar Mubarak — Break Your Fast"
@@ -435,7 +532,7 @@ class PrayerAlarmReceiver : BroadcastReceiver() {
         // Post immediate max-priority silent notification with fullScreenIntent
         // (Audio is played exclusively by PrayerAudioService to avoid double-playback)
         val notification = NotificationCompat.Builder(context, CHANNEL_MAIN_CALL)
-            .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
+            .setSmallIcon(R.drawable.ic_stat_hayya)
             .setContentTitle(notificationTitle)
             .setContentText(notificationText)
             .setStyle(NotificationCompat.BigTextStyle().bigText(notificationText))
@@ -456,37 +553,37 @@ class PrayerAlarmReceiver : BroadcastReceiver() {
         } catch (e: Exception) {
             Log.d(TAG, "Direct wake activity launch deferred to fullScreenIntent: ${e.message}")
         }
+    }
 
-        // Trigger Congregational Prayer Auto-Mute (Mosque Mode) if configured
-        val dataStore = PreferenceDataStoreProvider.getDataStore(context)
-        val repository = UserPreferencesRepository(dataStore)
-        CoroutineScope(Dispatchers.Default + SupervisorJob()).launch {
-            try {
-                val prefs = repository.userPreferencesFlow.first()
-                val durationMinutes = if (isFridayJumuah) {
-                    prefs.fridayAutoMuteDuration.resolveMinutes(prefs.autoMuteDuration)
-                } else {
-                    prefs.autoMuteDuration.minutes
-                }
-
-                if (durationMinutes > 0) {
-                    val endEpochMillis = System.currentTimeMillis() + (durationMinutes * 60_000L)
-                    val activated = AutoMuteManager.activateAutoMute(
-                        context = context,
-                        durationMinutes = durationMinutes,
-                        targetMode = prefs.autoMuteTargetMode,
-                        repository = repository,
-                        isFridayJumuah = isFridayJumuah
-                    )
-                    if (activated) {
-                        val engine = PrayerCalculationEngine()
-                        val scheduler = PrayerAlarmScheduler(context, engine, repository)
-                        scheduler.scheduleAutoUnmute(endEpochMillis)
-                    }
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Error activating auto-mute during main call", e)
+    private suspend fun activatePrayerAutoMuteIfConfigured(
+        context: Context,
+        repository: UserPreferencesRepository,
+        scheduler: PrayerAlarmScheduler,
+        isFridayJumuah: Boolean
+    ) {
+        try {
+            val prefs = repository.userPreferencesFlow.first()
+            val durationMinutes = if (isFridayJumuah) {
+                prefs.fridayAutoMuteDuration.resolveMinutes(prefs.autoMuteDuration)
+            } else {
+                prefs.autoMuteDuration.minutes
             }
+
+            if (durationMinutes > 0) {
+                val endEpochMillis = System.currentTimeMillis() + (durationMinutes * 60_000L)
+                val activated = AutoMuteManager.activateAutoMute(
+                    context = context,
+                    durationMinutes = durationMinutes,
+                    targetMode = prefs.autoMuteTargetMode,
+                    repository = repository,
+                    isFridayJumuah = isFridayJumuah
+                )
+                if (activated) {
+                    scheduler.scheduleAutoUnmute(endEpochMillis)
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error activating auto-mute during main call", e)
         }
     }
 
@@ -547,9 +644,10 @@ class PrayerAlarmReceiver : BroadcastReceiver() {
                 "Suhoor & Fasting Alerts",
                 NotificationManager.IMPORTANCE_HIGH
             ).apply {
-                description = "Wake-up reminders and alerts before Fajr Suhoor cutoff"
-                setSound(defaultNotificationSound, reminderAudioAttributes)
+                description = "Full-screen wake-up alarm and alerts before Fajr Suhoor cutoff"
+                setSound(null, null) // Audio handled exclusively by PrayerAudioService
                 enableVibration(true)
+                setBypassDnd(true)
             }
 
             val eidChannel = NotificationChannel(

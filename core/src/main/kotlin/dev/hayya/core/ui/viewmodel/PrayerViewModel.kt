@@ -11,12 +11,15 @@ import dev.hayya.core.domain.calculation.DailyPrayerTimes
 import dev.hayya.core.domain.calculation.FastingType
 import dev.hayya.core.domain.calculation.NightFastingCalculator
 import dev.hayya.core.domain.calculation.PrayerCalculationEngine
+import dev.hayya.core.domain.calculation.SindhMosqueSchedule
 import dev.hayya.core.domain.model.AlertMode
 import dev.hayya.core.domain.model.AutoMuteDuration
 import dev.hayya.core.domain.model.AutoMuteTargetMode
 import dev.hayya.core.domain.model.AutoSilenceTimeout
 import dev.hayya.core.domain.model.CalculationMethodOption
+import dev.hayya.core.domain.model.CityPreset
 import dev.hayya.core.domain.model.FridayAutoMuteDuration
+import dev.hayya.core.domain.model.GeoLocation
 import dev.hayya.core.domain.model.HighLatitudeRuleOption
 import dev.hayya.core.domain.model.MadhabOption
 import dev.hayya.core.domain.model.PrayerType
@@ -66,14 +69,15 @@ data class PrayerTimeRowUiState(
     val timeFormatted: String,
     val isPast: Boolean,
     val isActive: Boolean,
-    val audioMode: AlertMode
+    val audioMode: AlertMode,
+    val jamaatTimeFormatted: String = ""
 )
 
 /**
  * Complete, unified immutable UI state for the ultra-minimalist prayer dashboard.
  */
 data class PrayerDashboardUiState(
-    val locationName: String = "Makkah, Saudi Arabia",
+    val locationName: String = "Larkana, Pakistan",
     val nextPrayerType: PrayerType = PrayerType.DHUHR,
     val nextPrayerName: String = "DHUHR",
     val nextPrayerTimestampMillis: Long = 0L,
@@ -122,7 +126,17 @@ data class PrayerDashboardUiState(
     val isSunnahFastingTomorrow: Boolean = false,
     val currentTab: AppNavTab = AppNavTab.DASHBOARD,
     val isFriday: Boolean = false,
-    val isSurahKahfRead: Boolean = false
+    val isSurahKahfRead: Boolean = false,
+    val isTrackerOpen: Boolean = false,
+    val isTahajjudOpen: Boolean = false,
+    val isFridayGuideOpen: Boolean = false,
+    val isOnboardingForced: Boolean = false,
+    val salawatCount: Int = 0,
+    val sehriIhtiyatFormatted: String = "",
+    val ishraqTimeFormatted: String = "",
+    val zawalWindowFormatted: String = "",
+    val mosqueSeasonLabel: String = "",
+    val isPreferencesLoaded: Boolean = false
 )
 
 /**
@@ -406,7 +420,95 @@ class PrayerViewModel(
                 isSettingsOpen = (tab == AppNavTab.SETTINGS),
                 isTasbihOpen = false,
                 isQiblaOpen = false,
-                isRamadanOpen = false
+                isRamadanOpen = false,
+                isTrackerOpen = false,
+                isTahajjudOpen = false,
+                isFridayGuideOpen = false,
+                isOnboardingForced = false
+            )
+        }
+    }
+
+    /**
+     * Toggles visibility of the dedicated Prayer Tracker & 7-Day Habits page.
+     */
+    fun setTrackerOpen(isOpen: Boolean) {
+        _uiState.update { it.copy(isTrackerOpen = isOpen) }
+    }
+
+    /**
+     * Toggles visibility of the dedicated Night & Tahajjud Sky page.
+     */
+    fun setTahajjudOpen(isOpen: Boolean) {
+        _uiState.update { it.copy(isTahajjudOpen = isOpen) }
+    }
+
+    /**
+     * Toggles visibility of the dedicated Friday (Jumu'ah) Guide page.
+     */
+    fun setFridayGuideOpen(isOpen: Boolean) {
+        _uiState.update { it.copy(isFridayGuideOpen = isOpen) }
+    }
+
+    /**
+     * Opens the quick guided setup wizard on demand from Settings.
+     */
+    fun openOnboarding() {
+        _uiState.update { it.copy(isOnboardingForced = true) }
+    }
+
+    /**
+     * Marks guided onboarding complete and returns to the main dashboard.
+     */
+    fun completeOnboarding() {
+        _uiState.update { it.copy(isOnboardingForced = false) }
+        viewModelScope.launch {
+            preferencesRepository.updateHasCompletedOnboarding(true)
+        }
+    }
+
+    /**
+     * Increments the Friday Salawat counter and persists it.
+     */
+    fun incrementSalawat() {
+        val next = _uiState.value.salawatCount + 1
+        _uiState.update { it.copy(salawatCount = next) }
+        viewModelScope.launch {
+            preferencesRepository.updateSalawatCount(next)
+        }
+    }
+
+    /**
+     * Resets the Friday Salawat counter and persists it.
+     */
+    fun resetSalawat() {
+        _uiState.update { it.copy(salawatCount = 0) }
+        viewModelScope.launch {
+            preferencesRepository.updateSalawatCount(0)
+        }
+    }
+
+    /**
+     * Selects a curated city preset, updating coordinates, location name, and regional method offline.
+     */
+    fun selectCity(city: CityPreset) {
+        viewModelScope.launch {
+            preferencesRepository.updateCoordinates(
+                latitude = city.latitude,
+                longitude = city.longitude,
+                locationName = city.displayTitle
+            )
+            preferencesRepository.updateCalculationMethod(city.recommendedMethod)
+            alarmScheduler?.scheduleRollingAlarms(
+                preferences = currentPreferences.copy(
+                    location = GeoLocation(
+                        latitude = city.latitude,
+                        longitude = city.longitude,
+                        altitude = 0.0,
+                        resolvedLocationName = city.displayTitle
+                    ),
+                    calculationMethod = city.recommendedMethod
+                )
             )
         }
     }
@@ -456,7 +558,7 @@ class PrayerViewModel(
     }
 
     /**
-     * Updates Suhoor wake-up alarm settings.
+     * Updates Suhoor wake-up alarm settings and reschedules rolling alarms.
      */
     fun updateSuhoorAlarm(enabled: Boolean, minutesBefore: Int? = null) {
         viewModelScope.launch {
@@ -464,36 +566,43 @@ class PrayerViewModel(
             if (minutesBefore != null) {
                 fastTrackerRepository?.updateSuhoorAlarmMinutesBefore(minutesBefore)
             }
+            val updatedSettings = _uiState.value.ramadanSettings.copy(
+                suhoorAlarmEnabled = enabled,
+                suhoorAlarmMinutesBefore = minutesBefore ?: _uiState.value.ramadanSettings.suhoorAlarmMinutesBefore
+            )
             if (!enabled) {
                 alarmScheduler?.cancelSuhoorAlarm()
             } else {
-                val times = cachedDailyTimes
-                val mins = minutesBefore ?: _uiState.value.ramadanSettings.suhoorAlarmMinutesBefore
-                if (times != null) {
-                    val trigger = times.fajr - (mins * 60_000L)
-                    if (trigger > clock.now().toEpochMilliseconds()) {
-                        alarmScheduler?.scheduleSuhoorAlarm(trigger, times.fajr)
-                    }
-                }
+                alarmScheduler?.scheduleRollingAlarms(
+                    preferences = currentPreferences,
+                    ramadanSettings = updatedSettings
+                )
             }
         }
     }
 
     /**
-     * Updates Iftar Maghrib notification alert setting.
+     * Updates Iftar Maghrib notification alert setting and updates pending alarms.
      */
     fun updateIftarAlert(enabled: Boolean) {
         viewModelScope.launch {
             fastTrackerRepository?.updateIftarNotificationEnabled(enabled)
+            val updatedSettings = _uiState.value.ramadanSettings.copy(iftarNotificationEnabled = enabled)
+            alarmScheduler?.scheduleRollingAlarms(
+                preferences = currentPreferences,
+                ramadanSettings = updatedSettings
+            )
         }
     }
 
     /**
-     * Updates celebratory Eid morning greeting alert setting.
+     * Deprecated for V1: Eid auto-notifications are deferred to a dedicated future Eid screen.
      */
     fun updateEidAlert(enabled: Boolean) {
         viewModelScope.launch {
             fastTrackerRepository?.updateEidNotificationEnabled(enabled)
+            @Suppress("DEPRECATION")
+            alarmScheduler?.cancelEidCelebration()
         }
     }
 
@@ -555,24 +664,34 @@ class PrayerViewModel(
     }
 
     /**
-     * Increments current Tasbih count.
+     * Increments current Tasbih count and persists it.
      */
     fun incrementTasbih() {
-        _uiState.update { it.copy(tasbihCount = it.tasbihCount + 1) }
+        val next = _uiState.value.tasbihCount + 1
+        _uiState.update { it.copy(tasbihCount = next) }
+        viewModelScope.launch {
+            preferencesRepository.updateTasbihCount(next)
+        }
     }
 
     /**
-     * Resets current Tasbih count back to 0.
+     * Resets current Tasbih count back to 0 and persists it.
      */
     fun resetTasbih() {
         _uiState.update { it.copy(tasbihCount = 0) }
+        viewModelScope.launch {
+            preferencesRepository.updateTasbihCount(0)
+        }
     }
 
     /**
-     * Sets operating Tasbih target mode.
+     * Sets operating Tasbih target mode and persists it.
      */
     fun setTasbihMode(mode: TasbihTargetMode) {
         _uiState.update { it.copy(tasbihMode = mode) }
+        viewModelScope.launch {
+            preferencesRepository.updateTasbihMode(mode)
+        }
     }
 
     /**
@@ -751,7 +870,14 @@ class PrayerViewModel(
         val isSurahKahfRead = currentPreferences.isSurahKahfReadForDate(localDate.toString())
         val nextPrayerDisplayName = nextPrayer.displayName(isFriday)
 
-        val dailyItems = buildDailyPrayerRows(dailyTimes, nowMillis, window, isFriday)
+        val mosqueInfo = SindhMosqueSchedule.computeDailyInfo(localDate, dailyTimes, isFriday)
+        val dailyItems = buildDailyPrayerRows(
+            dailyTimes = dailyTimes,
+            nowMillis = nowMillis,
+            window = window,
+            isFriday = isFriday,
+            jamaatTimesMillis = mosqueInfo.jamaatTimesMillis
+        )
         val hijriDate = formatHijriDate(localDate)
         val islamicDate = IslamicCalendarHelper.resolveIslamicDate(localDate)
 
@@ -773,7 +899,7 @@ class PrayerViewModel(
 
         _uiState.update {
             it.copy(
-                locationName = currentPreferences.location.resolvedLocationName.ifEmpty { "Makkah" },
+                locationName = currentPreferences.location.resolvedLocationName.ifEmpty { "Larkana" },
                 nextPrayerType = nextPrayer,
                 nextPrayerName = nextPrayerDisplayName,
                 nextPrayerTimestampMillis = nextPrayerTimeMillis,
@@ -801,7 +927,15 @@ class PrayerViewModel(
                 isSunnahFastingToday = voluntaryFasting.isFastingDayToday,
                 isSunnahFastingTomorrow = voluntaryFasting.isFastingDayTomorrow,
                 isFriday = isFriday,
-                isSurahKahfRead = isSurahKahfRead
+                isSurahKahfRead = isSurahKahfRead,
+                sehriIhtiyatFormatted = formatTimeOfDay(mosqueInfo.sehriIhtiyatEpochMillis, timeZone),
+                ishraqTimeFormatted = formatTimeOfDay(mosqueInfo.ishraqStartEpochMillis, timeZone),
+                zawalWindowFormatted = "${formatTimeOfDay(mosqueInfo.zawalStartEpochMillis, timeZone)} – ${formatTimeOfDay(dailyTimes.dhuhr, timeZone)}",
+                mosqueSeasonLabel = mosqueInfo.season.displayName,
+                tasbihCount = currentPreferences.tasbihCount,
+                tasbihMode = currentPreferences.tasbihMode,
+                salawatCount = currentPreferences.salawatCount,
+                isPreferencesLoaded = true
             )
         }
     }
@@ -865,7 +999,8 @@ class PrayerViewModel(
         dailyTimes: DailyPrayerTimes,
         nowMillis: Long,
         window: PrayerWindow,
-        isFriday: Boolean = false
+        isFriday: Boolean = false,
+        jamaatTimesMillis: Map<PrayerType, Long> = emptyMap()
     ): List<PrayerTimeRowUiState> {
         val timeZone = TimeZone.currentSystemDefault()
 
@@ -876,6 +1011,9 @@ class PrayerViewModel(
                 is PrayerWindow.Active -> window.currentPrayer == prayerType || window.nextPrayer == prayerType
                 is PrayerWindow.SunriseInterval -> prayerType == PrayerType.SUNRISE || prayerType == PrayerType.DHUHR
             }
+            val jamaatFormatted = jamaatTimesMillis[prayerType]
+                ?.let { formatTimeOfDay(it, timeZone) }
+                .orEmpty()
 
             PrayerTimeRowUiState(
                 prayerType = prayerType,
@@ -884,7 +1022,8 @@ class PrayerViewModel(
                 timeFormatted = formatTimeOfDay(timeMillis, timeZone),
                 isPast = isPast,
                 isActive = isActive,
-                audioMode = currentPreferences.getAlertMode(prayerType)
+                audioMode = currentPreferences.getAlertMode(prayerType),
+                jamaatTimeFormatted = jamaatFormatted
             )
         }
     }

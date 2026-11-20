@@ -19,6 +19,7 @@ import android.os.PowerManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
+import dev.hayya.core.R
 import dev.hayya.core.system.ui.PrayerWakeActivity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -110,7 +111,9 @@ class PrayerAudioService : Service() {
                 setAudioAttributes(audioAttributes)
                 setWakeMode(applicationContext, PowerManager.PARTIAL_WAKE_LOCK)
                 setDataSource(applicationContext, soundUri)
-                isLooping = false
+                // Loop short system alarm chimes while an auto-silence timeout is active so
+                // playback does not terminate prematurely and close PrayerWakeActivity.
+                isLooping = timeoutSeconds > 0
                 setOnCompletionListener {
                     Log.i(TAG, "Audio playback completed naturally")
                     stopPlaybackAndSelf()
@@ -290,10 +293,21 @@ class PrayerAudioService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
+        val title = if (prayerName.equals("Suhoor", ignoreCase = true)) {
+            "Suhoor Wake-Up"
+        } else {
+            "Adhan: $prayerName"
+        }
+        val text = if (prayerName.equals("Suhoor", ignoreCase = true)) {
+            "Eat Suhoor & make Niyyah before Fajr"
+        } else {
+            "Calling to $prayerName prayer"
+        }
+
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
-            .setContentTitle("Adhan: $prayerName")
-            .setContentText("Calling to $prayerName prayer")
+            .setSmallIcon(R.drawable.ic_stat_hayya)
+            .setContentTitle(title)
+            .setContentText(text)
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setCategory(NotificationCompat.CATEGORY_ALARM)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
