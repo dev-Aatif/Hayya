@@ -432,10 +432,7 @@ fun TasbihScreen(
 }
 
 private fun triggerClockTickHaptic(view: View, context: Context) {
-    val performed = view.performHapticFeedback(
-        HapticFeedbackConstants.CLOCK_TICK,
-        HapticFeedbackConstants.FLAG_IGNORE_GLOBAL_SETTING
-    )
+    val performed = view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
     if (!performed) {
         val vibrator = getVibrator(context)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {

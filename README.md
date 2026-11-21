@@ -26,7 +26,7 @@ Built with pure Kotlin, Jetpack Compose (Material 3), and Jetpack Glance AppWidg
 - **100% Offline & Private:** Zero internet permission, zero analytics, zero trackers. All prayer times, Hijri calendar dates (`java.time.chrono.HijrahDate`), Qibla bearings, and city coordinates execute locally on-device.
 - **Dual Astronomical Solver:** Powered by Batoul Apps `adhan` (`1.2.1`) with an offline Jean Meeus solar solver (`SolarAstronomicalCalculator`).
 - **Regional Mosque Conventions (`SindhMosqueSchedule`):** Models Sehri Ihtiyat (10m safety window), Ishraq, Zawal, pre-Maghrib Makrooh buffers, and seasonal Summer/Winter Adhan-to-Jama'at intervals.
-- **Larkana Division Offline Directory:** Covers 37 municipal corporations, taluka headquarters, and town committees across Larkana, Qambar Shahdadkot, Shikarpur, Jacobabad, and Kashmore, alongside major Pakistani and global reference cities.
+- **Larkana Division Offline Directory:** Covers 37 municipal corporations, taluka headquarters, and town committees across Larkana, Qambar Shahdadkot, Shikarpur, Jacobabad, and Kashmore.
 
 ### Alarms & Mosque Mode
 - **3-Tier Alert Pipeline:** Optional 15-minute Pre-Reminder (`T0 - 15m`), Main Call (`T0`) with lockscreen `FullScreenIntent` wake, and 20-minute Last Call warning (`T_end - 20m`).

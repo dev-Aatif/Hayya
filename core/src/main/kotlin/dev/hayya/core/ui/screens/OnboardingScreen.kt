@@ -29,6 +29,7 @@ import androidx.compose.material.icons.outlined.BatteryChargingFull
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.LocationOn
 import androidx.compose.material.icons.outlined.NotificationsActive
+import androidx.compose.material.icons.outlined.ScreenLockPortrait
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -69,11 +70,13 @@ fun OnboardingScreen(
     isBatteryOptimizationGranted: Boolean,
     isExactAlarmGranted: Boolean,
     isNotificationGranted: Boolean = true,
+    isFullScreenIntentGranted: Boolean = true,
     onSelectCity: (CityPreset) -> Unit,
     onSelectMadhab: (MadhabOption) -> Unit,
     onRequestNotificationPermission: () -> Unit = {},
     onRequestBatteryOptimization: () -> Unit,
     onRequestExactAlarm: () -> Unit,
+    onRequestFullScreenIntent: () -> Unit = {},
     onCompleteSetup: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -155,9 +158,11 @@ fun OnboardingScreen(
                     isNotificationGranted = isNotificationGranted,
                     isBatteryOptimizationGranted = isBatteryOptimizationGranted,
                     isExactAlarmGranted = isExactAlarmGranted,
+                    isFullScreenIntentGranted = isFullScreenIntentGranted,
                     onRequestNotificationPermission = onRequestNotificationPermission,
                     onRequestBatteryOptimization = onRequestBatteryOptimization,
-                    onRequestExactAlarm = onRequestExactAlarm
+                    onRequestExactAlarm = onRequestExactAlarm,
+                    onRequestFullScreenIntent = onRequestFullScreenIntent
                 )
             }
 
@@ -360,9 +365,11 @@ private fun OnboardingPermissionsCard(
     isNotificationGranted: Boolean,
     isBatteryOptimizationGranted: Boolean,
     isExactAlarmGranted: Boolean,
+    isFullScreenIntentGranted: Boolean,
     onRequestNotificationPermission: () -> Unit,
     onRequestBatteryOptimization: () -> Unit,
-    onRequestExactAlarm: () -> Unit
+    onRequestExactAlarm: () -> Unit,
+    onRequestFullScreenIntent: () -> Unit
 ) {
     Card(
         modifier = Modifier
@@ -411,6 +418,18 @@ private fun OnboardingPermissionsCard(
                 isGranted = isExactAlarmGranted,
                 onClick = onRequestExactAlarm
             )
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                Spacer(modifier = Modifier.height(12.dp))
+
+                PermissionRowItem(
+                    icon = Icons.Outlined.ScreenLockPortrait,
+                    title = "Lockscreen Wake",
+                    subtitle = if (isFullScreenIntentGranted) "Ready — shows alarm on locked screen" else "Tap to allow full-screen alarm wake",
+                    isGranted = isFullScreenIntentGranted,
+                    onClick = onRequestFullScreenIntent
+                )
+            }
         }
     }
 }

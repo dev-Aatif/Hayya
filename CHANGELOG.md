@@ -13,7 +13,7 @@ Initial V1 release focused on **Pakistan (Larkana Division)** offline verificati
   - `AlarmManager.setAlarmClock` exclusive scheduling across a 7-day rolling queue with deterministic request codes.
   - 3-tier alerts: Pre-Reminder (`T - 15m`), Main Call (`T0` with lockscreen `FullScreenIntent`), and Last Call (`T_end - 20m`).
   - `PrayerAudioService` routed on `USAGE_ALARM` using the device's familiar default alarm tone, with gradual volume escalation and smooth coroutine fade-out.
-  - `SystemClockChangedReceiver` auto-rescheduling on boot, locked boot, clock/timezone shifts, and app updates.
+  - `SystemClockChangedReceiver` auto-rescheduling on boot, clock/timezone shifts, and app updates.
   - `PinnedPrayerStatusService` optional foreground LMK shield and `OemPowerManager` battery optimization helpers.
 - **Mosque Auto-Mute**: Automatically switches ringer mode to Silent/Vibrate during Salah or Friday Khutbah, persists exact prior volumes in DataStore, and restores them automatically.
 - **Spiritual Companion Suite**: Live Qibla compass (`QiblaOrientationSensor`), tactile OLED Tasbih counter, Prayer Habits 7-day tracker, Night & Tahajjud calculator, Friday (Jumu'ah) checklist & Salawat counter, and Ramadan & Eid Hub (Suhoor/Iftar tracker, 30-day timetable, Sunnah Duas).

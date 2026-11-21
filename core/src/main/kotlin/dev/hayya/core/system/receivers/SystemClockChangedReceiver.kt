@@ -40,7 +40,7 @@ object PreferenceDataStoreProvider {
 
 /**
  * System BroadcastReceiver triggered on system state changes:
- * - [Intent.ACTION_BOOT_COMPLETED] & [Intent.ACTION_LOCKED_BOOT_COMPLETED]
+ * - [Intent.ACTION_BOOT_COMPLETED]
  * - [Intent.ACTION_TIME_SET] (Manual clock adjustment by user or network)
  * - [Intent.ACTION_TIMEZONE_CHANGED] (Travel or Daylight Saving shift)
  * - [Intent.ACTION_MY_PACKAGE_REPLACED] (App update / re-installation)

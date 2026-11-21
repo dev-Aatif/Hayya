@@ -76,7 +76,10 @@ class PrayerAlarmReceiver : BroadcastReceiver() {
                 try {
                     val dataStore = PreferenceDataStoreProvider.getDataStore(context)
                     val repository = UserPreferencesRepository(dataStore)
-                    AutoMuteManager.restoreRingerMode(context, repository)
+                    val restored = AutoMuteManager.restoreRingerMode(context, repository)
+                    if (restored) {
+                        PrayerAlarmScheduler(context, PrayerCalculationEngine(), repository).cancelAutoUnmute()
+                    }
                 } catch (e: Exception) {
                     Log.e(TAG, "Error restoring ringer mode upon window completion", e)
                 } finally {

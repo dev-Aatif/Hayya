@@ -24,6 +24,7 @@ import org.junit.Test
 class PrayerAlarmReceiverTest {
 
     private val context = mockk<Context>(relaxed = true)
+    private val alarmManager = mockk<android.app.AlarmManager>(relaxed = true)
     private val powerManager = mockk<PowerManager>(relaxed = true)
     private val wakeLock = mockk<PowerManager.WakeLock>(relaxed = true)
     private val notificationManager = mockk<NotificationManager>(relaxed = true)
@@ -45,6 +46,7 @@ class PrayerAlarmReceiverTest {
         every { ContextCompat.startForegroundService(any(), any()) } returns Unit
         every { PendingIntent.getActivity(any(), any(), any(), any()) } returns mockk(relaxed = true)
         every { RingtoneManager.getDefaultUri(any()) } returns mockk(relaxed = true)
+        every { context.getSystemService(Context.ALARM_SERVICE) } returns alarmManager
         every { context.getSystemService(Context.POWER_SERVICE) } returns powerManager
         every { context.getSystemService(Context.NOTIFICATION_SERVICE) } returns notificationManager
         every { powerManager.newWakeLock(any(), any()) } returns wakeLock
@@ -212,8 +214,19 @@ class PrayerAlarmReceiverTest {
 
     @Test
     fun onReceive_restoreRingerModeAction_acquiresWakeLockAndProcessesRestore() {
+        val autoUnmutePendingIntent = mockk<PendingIntent>(relaxed = true)
+        mockkObject(PreferenceDataStoreProvider)
+        every { PreferenceDataStoreProvider.getDataStore(any()) } returns mockk(relaxed = true)
         mockkObject(dev.hayya.core.system.audio.AutoMuteManager)
         coEvery { dev.hayya.core.system.audio.AutoMuteManager.restoreRingerMode(any(), any()) } returns true
+        every {
+            PendingIntent.getBroadcast(
+                any(),
+                PrayerAlarmScheduler.NOTIFICATION_ID_AUTO_UNMUTE,
+                any(),
+                any()
+            )
+        } returns autoUnmutePendingIntent
 
         val intent = mockk<Intent>(relaxed = true) {
             every { action } returns PrayerAlarmScheduler.ACTION_RESTORE_RINGER_MODE
@@ -223,6 +236,9 @@ class PrayerAlarmReceiverTest {
 
         verify(exactly = 1) {
             wakeLock.acquire(5_000L)
+        }
+        verify(timeout = 2_000L, exactly = 1) {
+            alarmManager.cancel(autoUnmutePendingIntent)
         }
     }
 

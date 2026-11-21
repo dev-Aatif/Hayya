@@ -49,6 +49,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -120,6 +121,7 @@ class MainActivity : ComponentActivity() {
     private val isBatteryIgnoredState = mutableStateOf(false)
     private val isExactAlarmGrantedState = mutableStateOf(true)
     private val isNotificationGrantedState = mutableStateOf(true)
+    private val isFullScreenIntentGrantedState = mutableStateOf(true)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -179,6 +181,7 @@ class MainActivity : ComponentActivity() {
                     val isBatteryIgnored by isBatteryIgnoredState
                     val isExactAlarmGranted by isExactAlarmGrantedState
                     val isNotificationGranted by isNotificationGrantedState
+                    val isFullScreenIntentGranted by isFullScreenIntentGrantedState
                     var showExitDialog by remember { mutableStateOf(false) }
                     val missingPermissions by missingPermissionsState
 
@@ -260,6 +263,7 @@ class MainActivity : ComponentActivity() {
                                     isBatteryOptimizationGranted = isBatteryIgnored,
                                     isExactAlarmGranted = isExactAlarmGranted,
                                     isNotificationGranted = isNotificationGranted,
+                                    isFullScreenIntentGranted = isFullScreenIntentGranted,
                                     onSelectCity = { viewModel.selectCity(it) },
                                     onSelectMadhab = { viewModel.updateJuristicMethod(it) },
                                     onRequestNotificationPermission = {
@@ -272,10 +276,12 @@ class MainActivity : ComponentActivity() {
                                     },
                                     onRequestExactAlarm = {
                                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                                            val intent = Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).apply {
-                                                data = Uri.parse("package:$packageName")
-                                            }
-                                            startActivity(intent)
+                                            openPackageSettingsWithFallback(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM)
+                                        }
+                                    },
+                                    onRequestFullScreenIntent = {
+                                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                                            openPackageSettingsWithFallback(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT)
                                         }
                                     },
                                     onCompleteSetup = { viewModel.completeOnboarding() }
@@ -621,6 +627,16 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+        val fullScreenIntentGranted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            NotificationManagerCompat.from(this).canUseFullScreenIntent()
+        } else {
+            true
+        }
+        isFullScreenIntentGrantedState.value = fullScreenIntentGranted
+        if (!fullScreenIntentGranted) {
+            missing.add("Lockscreen Wake (to show alarm on locked screen)")
+        }
+
         missingPermissionsState.value = missing
     }
 
@@ -635,13 +651,29 @@ class MainActivity : ComponentActivity() {
         }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !app.alarmScheduler.canScheduleExactAlarms()) {
-            val intent = Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).apply {
-                data = Uri.parse("package:$packageName")
-            }
-            startActivity(intent)
+            openPackageSettingsWithFallback(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM)
+            return
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE &&
+            !NotificationManagerCompat.from(this).canUseFullScreenIntent()
+        ) {
+            openPackageSettingsWithFallback(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT)
             return
         }
 
         missingPermissionsState.value = emptyList()
+    }
+
+    private fun openPackageSettingsWithFallback(action: String) {
+        val intent = Intent(action).apply {
+            data = Uri.parse("package:$packageName")
+        }
+        runCatching { startActivity(intent) }.onFailure {
+            val fallback = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                data = Uri.parse("package:$packageName")
+            }
+            runCatching { startActivity(fallback) }
+        }
     }
 }
