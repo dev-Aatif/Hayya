@@ -63,6 +63,11 @@ class PrayerAlarmSchedulerTest {
 
         val alarmClockInfoSlot = slot<AlarmManager.AlarmClockInfo>()
         val pendingIntentSlot = slot<PendingIntent>()
+        val showIntentSlot = slot<Intent>()
+
+        every {
+            PendingIntent.getActivity(any(), any(), capture(showIntentSlot), any())
+        } returns mockk(relaxed = true)
 
         every {
             alarmManager.setAlarmClock(capture(alarmClockInfoSlot), capture(pendingIntentSlot))
@@ -80,6 +85,15 @@ class PrayerAlarmSchedulerTest {
         }
 
         assertThat(alarmClockInfoSlot.isCaptured).isTrue()
+        assertThat(showIntentSlot.isCaptured).isTrue()
+        verify(exactly = 1) {
+            PendingIntent.getActivity(
+                context,
+                alert.notificationId,
+                any(),
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+        }
     }
 
     @Test
@@ -157,12 +171,24 @@ class PrayerAlarmSchedulerTest {
         val delaySeconds = 15
         val clockInfoSlot = slot<AlarmManager.AlarmClockInfo>()
 
-        scheduler.scheduleTestAlarm(delaySeconds, PrayerType.DHUHR)
+        scheduler.scheduleTestAlarm(
+            delaySeconds = delaySeconds,
+            prayerType = PrayerType.DHUHR,
+            volumeEscalationSeconds = 20
+        )
 
         verify(atLeast = 1) {
             alarmManager.setAlarmClock(capture(clockInfoSlot), any())
         }
         assertThat(clockInfoSlot.isCaptured).isTrue()
+        verify(atLeast = 1) {
+            PendingIntent.getBroadcast(
+                context,
+                999999,
+                any(),
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+        }
     }
 
     @Test
@@ -172,6 +198,9 @@ class PrayerAlarmSchedulerTest {
         verify(atLeast = 1) {
             context.startActivity(any())
             context.sendBroadcast(any())
+        }
+        verify(exactly = 0) {
+            alarmManager.setAlarmClock(any(), any())
         }
     }
 
@@ -424,7 +453,16 @@ class PrayerAlarmSchedulerTest {
 
         scheduler.scheduleAutoUnmute(triggerEpoch)
 
-        assertThat(alarmClockInfoSlot.captured.showIntent).isEqualTo(activityShowIntent)
+        verify(exactly = 1) {
+            PendingIntent.getActivity(
+                context,
+                PrayerAlarmScheduler.NOTIFICATION_ID_AUTO_UNMUTE,
+                any(),
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            alarmManager.setAlarmClock(any(), any())
+        }
+        assertThat(alarmClockInfoSlot.isCaptured).isTrue()
     }
 
     @Test

@@ -253,23 +253,10 @@ class PrayerAlarmScheduler(
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val showIntent = Intent(context, PrayerWakeActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            putExtra(EXTRA_NOTIFICATION_ID, alert.notificationId)
-            putExtra(EXTRA_PRAYER_TYPE, alert.prayerType.name)
-            putExtra(EXTRA_ALERT_TIER, alert.tier.name)
-            putExtra(PrayerWakeActivity.EXTRA_AUTO_SILENCE_SECONDS, autoSilenceSeconds)
-            putExtra(PrayerWakeActivity.EXTRA_SHOW_POST_ADHAN_DUA, showPostAdhanDua)
-        }
-
-        val showPendingIntent = PendingIntent.getActivity(
-            context,
-            requestCode,
-            showIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        val alarmClockInfo = AlarmManager.AlarmClockInfo(
+            alert.triggerEpochMillis,
+            createMainActivityShowIntent(requestCode)
         )
-
-        val alarmClockInfo = AlarmManager.AlarmClockInfo(alert.triggerEpochMillis, showPendingIntent)
 
         try {
             alarmManager.setAlarmClock(alarmClockInfo, pendingIntent)
@@ -287,7 +274,8 @@ class PrayerAlarmScheduler(
         prayerType: PrayerType = PrayerType.ASR,
         alertMode: AlertMode = AlertMode.FULL_ALARM,
         autoSilenceSeconds: Int = 60,
-        showPostAdhanDua: Boolean = true
+        showPostAdhanDua: Boolean = true,
+        volumeEscalationSeconds: Int = 0
     ) {
         val triggerMillis = System.currentTimeMillis() + (delaySeconds * 1000L)
         val testNotificationId = 999999
@@ -300,6 +288,7 @@ class PrayerAlarmScheduler(
             putExtra(EXTRA_TRIGGER_MILLIS, triggerMillis)
             putExtra(EXTRA_ALERT_MODE, alertMode.name)
             putExtra(EXTRA_AUTO_SILENCE_SECONDS, autoSilenceSeconds)
+            putExtra(EXTRA_VOLUME_ESCALATION_SECONDS, volumeEscalationSeconds)
             putExtra(PrayerWakeActivity.EXTRA_SHOW_POST_ADHAN_DUA, showPostAdhanDua)
         }
 
@@ -310,37 +299,34 @@ class PrayerAlarmScheduler(
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val showIntent = Intent(context, PrayerWakeActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            putExtra(EXTRA_NOTIFICATION_ID, testNotificationId)
-            putExtra(EXTRA_PRAYER_TYPE, prayerType.name)
-            putExtra(EXTRA_ALERT_TIER, AlertTier.MAIN_CALL.name)
-            putExtra(PrayerWakeActivity.EXTRA_AUTO_SILENCE_SECONDS, autoSilenceSeconds)
-            putExtra(PrayerWakeActivity.EXTRA_SHOW_POST_ADHAN_DUA, showPostAdhanDua)
-        }
-
-        val showPendingIntent = PendingIntent.getActivity(
-            context,
-            testNotificationId,
-            showIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-
-        val alarmClockInfo = AlarmManager.AlarmClockInfo(triggerMillis, showPendingIntent)
-        try {
-            alarmManager.setAlarmClock(alarmClockInfo, pendingIntent)
-            Log.i(TAG, "Scheduled test alarm in $delaySeconds seconds ($triggerMillis)")
-        } catch (se: SecurityException) {
-            Log.e(TAG, "SecurityException scheduling test alarm", se)
-        }
-
         if (delaySeconds <= 0) {
+            val showIntent = Intent(context, PrayerWakeActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                putExtra(EXTRA_NOTIFICATION_ID, testNotificationId)
+                putExtra(EXTRA_PRAYER_TYPE, prayerType.name)
+                putExtra(EXTRA_ALERT_TIER, AlertTier.MAIN_CALL.name)
+                putExtra(PrayerWakeActivity.EXTRA_AUTO_SILENCE_SECONDS, autoSilenceSeconds)
+                putExtra(PrayerWakeActivity.EXTRA_SHOW_POST_ADHAN_DUA, showPostAdhanDua)
+            }
             try {
                 context.startActivity(showIntent)
             } catch (e: Exception) {
                 Log.d(TAG, "Instant activity start fallback: ${e.message}")
             }
             context.sendBroadcast(operationIntent)
+            Log.i(TAG, "Triggered instant test alarm ($triggerMillis)")
+            return
+        }
+
+        val alarmClockInfo = AlarmManager.AlarmClockInfo(
+            triggerMillis,
+            createMainActivityShowIntent(testNotificationId)
+        )
+        try {
+            alarmManager.setAlarmClock(alarmClockInfo, pendingIntent)
+            Log.i(TAG, "Scheduled test alarm in $delaySeconds seconds ($triggerMillis)")
+        } catch (se: SecurityException) {
+            Log.e(TAG, "SecurityException scheduling test alarm", se)
         }
     }
 

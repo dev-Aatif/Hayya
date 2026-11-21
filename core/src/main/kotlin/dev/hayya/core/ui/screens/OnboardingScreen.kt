@@ -1,6 +1,7 @@
 package dev.hayya.core.ui.screens
 
 import android.content.res.Configuration
+import android.os.Build
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -27,6 +28,7 @@ import androidx.compose.material.icons.outlined.Alarm
 import androidx.compose.material.icons.outlined.BatteryChargingFull
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.LocationOn
+import androidx.compose.material.icons.outlined.NotificationsActive
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -66,15 +68,13 @@ fun OnboardingScreen(
     selectedMadhab: MadhabOption,
     isBatteryOptimizationGranted: Boolean,
     isExactAlarmGranted: Boolean,
-    onRequestLocation: () -> Unit,
+    isNotificationGranted: Boolean = true,
+    onSelectCity: (CityPreset) -> Unit,
     onSelectMadhab: (MadhabOption) -> Unit,
+    onRequestNotificationPermission: () -> Unit = {},
     onRequestBatteryOptimization: () -> Unit,
     onRequestExactAlarm: () -> Unit,
     onCompleteSetup: () -> Unit,
-    latitude: Double = 21.4225,
-    longitude: Double = 39.8262,
-    onSelectCity: ((CityPreset) -> Unit)? = null,
-    onUpdateCustomCoordinates: ((Double, Double, String) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     var showCityPicker by remember { mutableStateOf(false) }
@@ -134,16 +134,10 @@ fun OnboardingScreen(
 
                 Spacer(modifier = Modifier.height(28.dp))
 
-                // 1. City Selection
+                // 1. City Selection (Larkana Division, Pakistan)
                 OnboardingLocationCard(
                     locationName = locationName,
-                    onClick = {
-                        if (onSelectCity != null) {
-                            showCityPicker = true
-                        } else {
-                            onRequestLocation()
-                        }
-                    }
+                    onClick = { showCityPicker = true }
                 )
 
                 Spacer(modifier = Modifier.height(14.dp))
@@ -158,8 +152,10 @@ fun OnboardingScreen(
 
                 // 3. Alarm Permissions
                 OnboardingPermissionsCard(
+                    isNotificationGranted = isNotificationGranted,
                     isBatteryOptimizationGranted = isBatteryOptimizationGranted,
                     isExactAlarmGranted = isExactAlarmGranted,
+                    onRequestNotificationPermission = onRequestNotificationPermission,
                     onRequestBatteryOptimization = onRequestBatteryOptimization,
                     onRequestExactAlarm = onRequestExactAlarm
                 )
@@ -193,15 +189,10 @@ fun OnboardingScreen(
         }
     }
 
-    if (showCityPicker && onSelectCity != null) {
+    if (showCityPicker) {
         CityPickerBottomSheet(
             currentLocationName = locationName,
-            currentLat = latitude,
-            currentLng = longitude,
             onSelectCity = onSelectCity,
-            onSelectCustomCoordinates = { lat, lng, name ->
-                onUpdateCustomCoordinates?.invoke(lat, lng, name)
-            },
             onDismiss = { showCityPicker = false }
         )
     }
@@ -366,8 +357,10 @@ private fun MadhabChoiceTile(
 
 @Composable
 private fun OnboardingPermissionsCard(
+    isNotificationGranted: Boolean,
     isBatteryOptimizationGranted: Boolean,
     isExactAlarmGranted: Boolean,
+    onRequestNotificationPermission: () -> Unit,
     onRequestBatteryOptimization: () -> Unit,
     onRequestExactAlarm: () -> Unit
 ) {
@@ -388,6 +381,18 @@ private fun OnboardingPermissionsCard(
             )
 
             Spacer(modifier = Modifier.height(14.dp))
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                PermissionRowItem(
+                    icon = Icons.Outlined.NotificationsActive,
+                    title = "Notifications",
+                    subtitle = if (isNotificationGranted) "Ready — prayer alerts can display" else "Tap to allow prayer alerts",
+                    isGranted = isNotificationGranted,
+                    onClick = onRequestNotificationPermission
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+            }
 
             PermissionRowItem(
                 icon = Icons.Outlined.BatteryChargingFull,
@@ -490,11 +495,12 @@ private fun PermissionRowItem(
 private fun OnboardingScreenPreview() {
     HayyaTheme {
         OnboardingScreen(
-            locationName = "Makkah, Saudi Arabia",
-            selectedMadhab = MadhabOption.STANDARD,
+            locationName = "Larkana, Pakistan",
+            selectedMadhab = MadhabOption.HANAFI,
             isBatteryOptimizationGranted = true,
             isExactAlarmGranted = true,
-            onRequestLocation = {},
+            isNotificationGranted = true,
+            onSelectCity = {},
             onSelectMadhab = {},
             onRequestBatteryOptimization = {},
             onRequestExactAlarm = {},

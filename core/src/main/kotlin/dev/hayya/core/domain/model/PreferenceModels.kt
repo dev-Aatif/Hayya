@@ -190,8 +190,8 @@ enum class HighLatitudeRuleOption(
  * Notification / alert behavior mode for an individual prayer.
  */
 enum class AlertMode(val displayName: String) {
-    /** Loud Adhan or continuous alarm requiring user dismissal */
-    FULL_ALARM("Full Alarm (Adhan / Sound)"),
+    /** Loud alarm using the device's default alarm tone requiring user dismissal */
+    FULL_ALARM("Full Alarm (Default Tone)"),
 
     /** Silent visual notification or heads-up banner */
     GENTLE_BANNER("Gentle Banner (Silent / Heads-up)"),
@@ -325,7 +325,7 @@ data class UserPreferences(
     val volumeEscalation: VolumeEscalationOption = VolumeEscalationOption.SECONDS_20,
     val tahajjudAlarmEnabled: Boolean = false,
     val tahajjudAlarmMinutesOffset: Int = 0,
-    val hasCompletedOnboarding: Boolean = true,
+    val hasCompletedOnboarding: Boolean = false,
     val tasbihCount: Int = 0,
     val tasbihMode: TasbihTargetMode = TasbihTargetMode.FATIMA_100,
     val salawatCount: Int = 0

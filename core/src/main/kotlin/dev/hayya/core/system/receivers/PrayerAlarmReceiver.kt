@@ -1,11 +1,14 @@
 package dev.hayya.core.system.receivers
 
+import android.Manifest
+import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.media.AudioAttributes
 import android.media.RingtoneManager
 import android.os.Build
@@ -147,7 +150,7 @@ class PrayerAlarmReceiver : BroadcastReceiver() {
                     .setAutoCancel(true)
                     .build()
 
-                NotificationManagerCompat.from(context).notify(PrayerAlarmScheduler.NOTIFICATION_ID_SUHOOR, notification)
+                notifySafely(context, PrayerAlarmScheduler.NOTIFICATION_ID_SUHOOR, notification)
 
                 try {
                     context.startActivity(fullScreenIntent)
@@ -211,7 +214,7 @@ class PrayerAlarmReceiver : BroadcastReceiver() {
                     .setAutoCancel(true)
                     .build()
 
-                NotificationManagerCompat.from(context).notify(PrayerAlarmScheduler.NOTIFICATION_ID_EID, notification)
+                notifySafely(context, PrayerAlarmScheduler.NOTIFICATION_ID_EID, notification)
             } finally {
                 if (wakeLock.isHeld) wakeLock.release()
                 pendingResult?.finish()
@@ -249,7 +252,7 @@ class PrayerAlarmReceiver : BroadcastReceiver() {
                     .setAutoCancel(true)
                     .build()
 
-                NotificationManagerCompat.from(context).notify(PrayerAlarmScheduler.NOTIFICATION_ID_TAHAJJUD, notification)
+                notifySafely(context, PrayerAlarmScheduler.NOTIFICATION_ID_TAHAJJUD, notification)
 
                 CoroutineScope(Dispatchers.Default + SupervisorJob()).launch {
                     try {
@@ -409,7 +412,7 @@ class PrayerAlarmReceiver : BroadcastReceiver() {
             .setAutoCancel(true)
             .build()
 
-        NotificationManagerCompat.from(context).notify(notificationId, notification)
+        notifySafely(context, notificationId, notification)
     }
 
     private fun handleLastCall(context: Context, notificationId: Int, prayerType: PrayerType) {
@@ -430,7 +433,7 @@ class PrayerAlarmReceiver : BroadcastReceiver() {
             .setAutoCancel(true)
             .build()
 
-        NotificationManagerCompat.from(context).notify(notificationId, notification)
+        notifySafely(context, notificationId, notification)
     }
 
     private fun handleGentleMainCall(
@@ -464,7 +467,7 @@ class PrayerAlarmReceiver : BroadcastReceiver() {
             .setAutoCancel(true)
             .build()
 
-        NotificationManagerCompat.from(context).notify(notificationId, notification)
+        notifySafely(context, notificationId, notification)
     }
 
     private fun handleMainCall(
@@ -545,7 +548,7 @@ class PrayerAlarmReceiver : BroadcastReceiver() {
             .setAutoCancel(true)
             .build()
 
-        NotificationManagerCompat.from(context).notify(notificationId, notification)
+        notifySafely(context, notificationId, notification)
 
         // Attempt direct activity start for active/interactive app state
         try {
@@ -585,6 +588,16 @@ class PrayerAlarmReceiver : BroadcastReceiver() {
         } catch (e: Exception) {
             Log.e(TAG, "Error activating auto-mute during main call", e)
         }
+    }
+
+    private fun notifySafely(context: Context, notificationId: Int, notification: Notification) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            Log.w(TAG, "Skipping notification $notificationId: POST_NOTIFICATIONS permission not granted")
+            return
+        }
+        NotificationManagerCompat.from(context).notify(notificationId, notification)
     }
 
     private fun ensureNotificationChannels(context: Context) {

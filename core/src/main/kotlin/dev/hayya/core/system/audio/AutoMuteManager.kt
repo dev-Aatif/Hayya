@@ -1,15 +1,18 @@
 package dev.hayya.core.system.audio
 
+import android.Manifest
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.media.AudioManager
 import android.os.Build
 import android.provider.Settings
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
 import dev.hayya.core.R
 import dev.hayya.core.data.preferences.UserPreferencesRepository
 import dev.hayya.core.domain.model.AutoMuteTargetMode
@@ -17,6 +20,7 @@ import dev.hayya.core.system.alarm.PrayerAlarmScheduler
 import dev.hayya.core.system.receivers.PrayerAlarmReceiver
 import dev.hayya.core.ui.MainActivity
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.firstOrNull
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -75,17 +79,32 @@ object AutoMuteManager {
         val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return false
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
 
-        // Capture current audio state before muting
-        val currentRingerMode = audioManager.ringerMode
-        val currentRingVolume = audioManager.getStreamVolume(AudioManager.STREAM_RING)
-        val currentNotifVolume = audioManager.getStreamVolume(AudioManager.STREAM_NOTIFICATION)
         val endEpochMillis = System.currentTimeMillis() + (durationMinutes * 60_000L)
+        val existingState = runCatching { repository.savedRingerStateFlow.firstOrNull() }.getOrNull()
+
+        // Preserve original pre-mute ringer state if already auto-muted so re-triggering
+        // (e.g. overlapping prayers or repeated Khutbah mute taps) never overwrites normal volumes.
+        val ringerModeToSave = if (existingState?.isAutoMuted == true) {
+            existingState.ringerMode
+        } else {
+            audioManager.ringerMode
+        }
+        val ringVolumeToSave = if (existingState?.isAutoMuted == true) {
+            existingState.ringVolume
+        } else {
+            audioManager.getStreamVolume(AudioManager.STREAM_RING)
+        }
+        val notifVolumeToSave = if (existingState?.isAutoMuted == true) {
+            existingState.notificationVolume
+        } else {
+            audioManager.getStreamVolume(AudioManager.STREAM_NOTIFICATION)
+        }
 
         // Save state to DataStore
         repository.saveRingerState(
-            ringerMode = currentRingerMode,
-            ringVolume = currentRingVolume,
-            notificationVolume = currentNotifVolume,
+            ringerMode = ringerModeToSave,
+            ringVolume = ringVolumeToSave,
+            notificationVolume = notifVolumeToSave,
             endEpochMillis = endEpochMillis
         )
 
@@ -203,6 +222,13 @@ object AutoMuteManager {
             .setCategory(NotificationCompat.CATEGORY_STATUS)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .build()
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            Log.w(TAG, "Skipping auto-mute notification: POST_NOTIFICATIONS permission not granted")
+            return
+        }
 
         notificationManager.notify(NOTIFICATION_ID, notification)
     }

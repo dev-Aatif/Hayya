@@ -84,8 +84,24 @@ class UserPreferencesRepositoryTest {
         // Default auto-silence
         assertThat(prefs.autoSilenceTimeout).isEqualTo(AutoSilenceTimeout.SECONDS_60)
 
-        // Default post-adhan dua enabled
+        // Default post-adhan dua enabled and onboarding incomplete on fresh install
         assertThat(prefs.showPostAdhanDua).isTrue()
+        assertThat(prefs.hasCompletedOnboarding).isFalse()
+    }
+
+    @Test
+    fun updateCoordinates_doesNotMarkOnboardingCompleted() = runTest {
+        repository.updateCoordinates(
+            latitude = 27.8052,
+            longitude = 68.2910,
+            locationName = "Ratodero, Larkana"
+        )
+
+        val updated = repository.userPreferencesFlow.first()
+        assertThat(updated.hasCompletedOnboarding).isFalse()
+
+        repository.updateHasCompletedOnboarding(true)
+        assertThat(repository.userPreferencesFlow.first().hasCompletedOnboarding).isTrue()
     }
 
     @Test
@@ -181,6 +197,19 @@ class UserPreferencesRepositoryTest {
         assertThat(prefs.location.latitude).isEqualTo(27.5590)
         assertThat(prefs.calculationMethod).isEqualTo(CalculationMethodOption.KARACHI)
         assertThat(prefs.getOffset(PrayerType.DHUHR)).isEqualTo(0)
+    }
+
+    @Test
+    fun updateCalculationMethod_unsupportedMethodsNormalizeToKarachi() = runTest {
+        listOf(
+            CalculationMethodOption.TEHRAN,
+            CalculationMethodOption.JAFARI,
+            CalculationMethodOption.OTHER
+        ).forEach { unsupported ->
+            repository.updateCalculationMethod(unsupported)
+            assertThat(repository.userPreferencesFlow.first().calculationMethod)
+                .isEqualTo(CalculationMethodOption.KARACHI)
+        }
     }
 
     @Test

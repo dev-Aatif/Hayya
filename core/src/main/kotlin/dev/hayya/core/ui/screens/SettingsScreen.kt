@@ -27,7 +27,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
 import androidx.compose.material.icons.outlined.AccessAlarm
 import androidx.compose.material.icons.outlined.AutoAwesome
-import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.LocationOn
 import androidx.compose.material.icons.outlined.NotificationsActive
 import androidx.compose.material.icons.outlined.Palette
@@ -39,16 +38,13 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -131,7 +127,6 @@ fun SettingsScreen(
     onSelectFridayAutoMuteDuration: (FridayAutoMuteDuration) -> Unit = {},
     onSelectAutoMuteTargetMode: (AutoMuteTargetMode) -> Unit = {},
     onSelectMadhab: (MadhabOption) -> Unit,
-    onSelectCalculationMethod: (CalculationMethodOption) -> Unit,
     onToggleIshaMidnight: (Boolean) -> Unit,
     onTogglePreReminder: (Boolean) -> Unit,
     onToggleLastCall: (Boolean) -> Unit,
@@ -143,10 +138,7 @@ fun SettingsScreen(
     onUpdatePrayerOffset: (PrayerType, Int) -> Unit,
     onLaunchBatterySettings: () -> Unit,
     onTriggerTestAlarm: (Int) -> Unit,
-    onUpdateLocation: (Double, Double, String) -> Unit = { _, _, _ -> },
-    onSelectCity: (CityPreset) -> Unit = { city ->
-        onUpdateLocation(city.latitude, city.longitude, city.displayTitle)
-    },
+    onSelectCity: (CityPreset) -> Unit = {},
     onOpenSetupGuide: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
@@ -181,12 +173,10 @@ fun SettingsScreen(
                 CalculationSubScreen(
                     userPreferences = userPreferences,
                     onBackClick = { activeSubSection = null },
-                    onSelectMethod = onSelectCalculationMethod,
                     onSelectMadhab = onSelectMadhab,
                     onSelectHighLatitudeRule = onSelectHighLatitudeRule,
                     onToggleIshaMidnight = onToggleIshaMidnight,
-                    onSelectCity = onSelectCity,
-                    onUpdateLocation = onUpdateLocation
+                    onSelectCity = onSelectCity
                 )
             }
             SettingsSubSection.ALERTS -> {
@@ -360,7 +350,7 @@ private fun MainSettingsMenu(
 
                 SettingsSectionNavRow(
                     title = "Alarms & Mosque Mode",
-                    description = "Adhan length, fade-in, auto-mute, and offsets",
+                    description = "Alarm duration, fade-in, auto-mute, and offsets",
                     icon = Icons.Outlined.NotificationsActive,
                     onClick = { onOpenSection(SettingsSubSection.ALERTS) }
                 )
@@ -378,7 +368,7 @@ private fun MainSettingsMenu(
 
                 SettingsSectionNavRow(
                     title = "Test Your Alarm",
-                    description = "Preview the Adhan sound and lockscreen wake",
+                    description = "Preview the alarm tone and lockscreen wake",
                     icon = Icons.Outlined.AccessAlarm,
                     onClick = { onOpenSection(SettingsSubSection.SIMULATOR) }
                 )
@@ -727,19 +717,15 @@ private fun AppearanceSubScreen(
 // ===========================================================================
 // SUB-SCREEN 1: LOCATION & PRAYER TIMES
 // ===========================================================================
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun CalculationSubScreen(
     userPreferences: UserPreferences,
     onBackClick: () -> Unit,
-    onSelectMethod: (CalculationMethodOption) -> Unit,
     onSelectMadhab: (MadhabOption) -> Unit,
     onSelectHighLatitudeRule: (HighLatitudeRuleOption) -> Unit,
     onToggleIshaMidnight: (Boolean) -> Unit,
-    onSelectCity: (CityPreset) -> Unit,
-    onUpdateLocation: (Double, Double, String) -> Unit
+    onSelectCity: (CityPreset) -> Unit
 ) {
-    var showMethodPicker by remember { mutableStateOf(false) }
     var showCityPicker by remember { mutableStateOf(false) }
 
     SubScreenContainer(
@@ -776,14 +762,14 @@ private fun CalculationSubScreen(
                         )
                         Column {
                             Text(
-                                text = userPreferences.location.resolvedLocationName.ifEmpty { "Makkah, Saudi Arabia" },
+                                text = userPreferences.location.resolvedLocationName.ifEmpty { "Larkana, Pakistan" },
                                 style = MaterialTheme.typography.titleSmall.copy(
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.onSurface
                                 )
                             )
                             Text(
-                                text = "Tap to search cities",
+                                text = "Tap to search towns in Larkana Division",
                                 style = MaterialTheme.typography.bodySmall.copy(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -812,10 +798,7 @@ private fun CalculationSubScreen(
 
         SettingsGroupCard(title = "Prayer Time Authority") {
             Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(14.dp))
-                    .clickable { showMethodPicker = true },
+                modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(14.dp),
                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
             ) {
@@ -828,7 +811,7 @@ private fun CalculationSubScreen(
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = userPreferences.calculationMethod.displayName,
+                            text = CalculationMethodOption.KARACHI.displayName,
                             style = MaterialTheme.typography.titleSmall.copy(
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.primary
@@ -836,7 +819,7 @@ private fun CalculationSubScreen(
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
-                            text = "Region: ${userPreferences.calculationMethod.defaultCity}",
+                            text = "Pakistan Sunni Standard • Fajr 18.0° / Isha 18.0°",
                             style = MaterialTheme.typography.bodySmall.copy(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -850,7 +833,7 @@ private fun CalculationSubScreen(
                         color = MaterialTheme.colorScheme.primaryContainer
                     ) {
                         Text(
-                            text = "Change",
+                            text = "Pakistan",
                             style = MaterialTheme.typography.labelMedium.copy(
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.primary
@@ -992,117 +975,9 @@ private fun CalculationSubScreen(
     if (showCityPicker) {
         CityPickerBottomSheet(
             currentLocationName = userPreferences.location.resolvedLocationName,
-            currentLat = userPreferences.location.latitude,
-            currentLng = userPreferences.location.longitude,
             onSelectCity = onSelectCity,
-            onSelectCustomCoordinates = onUpdateLocation,
             onDismiss = { showCityPicker = false }
         )
-    }
-
-    if (showMethodPicker) {
-        ModalBottomSheet(
-            onDismissRequest = { showMethodPicker = false },
-            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-            dragHandle = {
-                Box(
-                    modifier = Modifier
-                        .padding(vertical = 10.dp)
-                        .size(width = 38.dp, height = 4.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.outlineVariant)
-                )
-            }
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp)
-                    .padding(bottom = 32.dp)
-            ) {
-                Text(
-                    text = "Prayer Time Method",
-                    style = MaterialTheme.typography.titleLarge.copy(
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "Pick the standard used in your region.",
-                    style = MaterialTheme.typography.bodySmall.copy(
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                )
-                Spacer(modifier = Modifier.height(14.dp))
-
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    CalculationMethodOption.entries.forEach { method ->
-                        val isSelected = method == userPreferences.calculationMethod
-                        Surface(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(14.dp))
-                                .clickable {
-                                    onSelectMethod(method)
-                                    showMethodPicker = false
-                                },
-                            shape = RoundedCornerShape(14.dp),
-                            color = if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f) else MaterialTheme.colorScheme.surfaceContainer,
-                            border = BorderStroke(
-                                1.dp,
-                                if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f)
-                            )
-                        ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(14.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = method.displayName,
-                                        style = MaterialTheme.typography.titleSmall.copy(
-                                            fontWeight = FontWeight.Bold,
-                                            color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-                                        )
-                                    )
-                                    Text(
-                                        text = method.defaultCity,
-                                        style = MaterialTheme.typography.labelSmall.copy(
-                                            color = MaterialTheme.colorScheme.primary
-                                        )
-                                    )
-                                    Spacer(modifier = Modifier.height(3.dp))
-                                    Text(
-                                        text = method.description,
-                                        style = MaterialTheme.typography.bodySmall.copy(
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    )
-                                }
-                                if (isSelected) {
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Icon(
-                                        imageVector = Icons.Outlined.Check,
-                                        contentDescription = "Selected",
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
     }
 }
 
@@ -1126,12 +1001,12 @@ private fun AlertsSubScreen(
 ) {
     SubScreenContainer(
         title = "Alarms & Sound",
-        subtitle = "Adhan length, reminders & Mosque mode",
+        subtitle = "Alarm duration, reminders & Mosque mode",
         onBackClick = onBackClick
     ) {
-        SettingsGroupCard(title = "Adhan Sound") {
+        SettingsGroupCard(title = "Alarm Sound (Default Device Tone)") {
             Text(
-                text = "Stop Adhan automatically after",
+                text = "Uses your device's default alarm tone • Stop automatically after",
                 style = MaterialTheme.typography.labelLarge.copy(color = MaterialTheme.colorScheme.onSurface)
             )
             Spacer(modifier = Modifier.height(8.dp))
@@ -1658,7 +1533,7 @@ private fun SimulatorSubScreen(
     ) {
         SettingsGroupCard(title = "How to Test") {
             Text(
-                text = "1. Pick a delay below.\n2. Tap Start Test.\n3. Lock your phone screen to see Hayya wake up with Adhan audio.",
+                text = "1. Pick a delay below.\n2. Tap Start Test.\n3. Lock your phone screen to see Hayya wake up with your alarm tone.",
                 style = MaterialTheme.typography.bodyMedium.copy(
                     lineHeight = 22.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant

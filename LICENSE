@@ -1,0 +1,43 @@
+HAYYA PROPRIETARY SOFTWARE LICENSE
+Version 1.0
+
+Copyright (c) 2026 dev-Aatif (Aatiff.P@proton.me). All Rights Reserved.
+
+1. Ownership
+The Hayya software application, source code, user interface designs, assets,
+documentation, and compiled binaries (collectively, the "Software") are the
+exclusive proprietary property of the Author (dev-Aatif). All rights, title,
+and interest not expressly granted under this License are reserved by the Author.
+
+2. Permitted Personal Use
+You are granted a limited, non-exclusive, non-transferable, revocable license
+to download and install official pre-built releases of the Software on personal
+Android devices solely for your own personal, non-commercial use.
+
+3. Restrictions
+Without the prior explicit written permission of the Author, you may NOT:
+  a) Copy, modify, adapt, translate, or create derivative works of the Software
+     or any part of its source code or assets;
+  b) Redistribute, publish, sublicense, sell, rent, lease, or host the Software
+     or modified builds on any app store, repository mirror, or third-party
+     distribution platform;
+  c) Reverse engineer, decompile, or extract assets from compiled binaries
+     except to the extent expressly permitted by applicable law;
+  d) Use the Software, its name ("Hayya"), branding, or code for commercial
+     products or services.
+
+4. Source Code Visibility
+Public availability of this source repository on GitHub is provided solely for
+code transparency, security inspection, and issue reporting. Visibility of the
+source code does NOT grant any open-source license or right to redistribute,
+fork for redistribution, or publish derivative builds.
+
+5. Disclaimer of Warranty & Limitation of Liability
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO ACCURACY OF PRAYER TIMES, ALARM
+DELIVERY ON SPECIFIC DEVICE HARDWARE/OEMs, OR FITNESS FOR A PARTICULAR PURPOSE.
+IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER
+LIABILITY ARISING FROM USE OF THE SOFTWARE.
+
+6. Contact
+For licensing inquiries or written permissions, contact: Aatiff.P@proton.me

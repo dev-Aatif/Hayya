@@ -119,6 +119,7 @@ class MainActivity : ComponentActivity() {
     private val missingPermissionsState = mutableStateOf<List<String>>(emptyList())
     private val isBatteryIgnoredState = mutableStateOf(false)
     private val isExactAlarmGrantedState = mutableStateOf(true)
+    private val isNotificationGrantedState = mutableStateOf(true)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -177,10 +178,12 @@ class MainActivity : ComponentActivity() {
                 ) {
                     val isBatteryIgnored by isBatteryIgnoredState
                     val isExactAlarmGranted by isExactAlarmGrantedState
+                    val isNotificationGranted by isNotificationGrantedState
                     var showExitDialog by remember { mutableStateOf(false) }
                     val missingPermissions by missingPermissionsState
 
-                    LaunchedEffect(state.userPreferences.pinnedNotificationEnabled) {
+                    LaunchedEffect(state.isPreferencesLoaded, state.userPreferences.pinnedNotificationEnabled) {
+                        if (!state.isPreferencesLoaded) return@LaunchedEffect
                         if (state.userPreferences.pinnedNotificationEnabled) {
                             PinnedPrayerStatusService.start(this@MainActivity)
                         } else {
@@ -188,8 +191,19 @@ class MainActivity : ComponentActivity() {
                         }
                     }
 
-                    // Keep all home screen widgets in live sync whenever preferences or prayer logs change
-                    LaunchedEffect(state.userPreferences, state.todayPrayerLog) {
+                    // Keep all home screen widgets in live sync whenever widget-relevant preferences or prayer logs change
+                    LaunchedEffect(
+                        state.isPreferencesLoaded,
+                        state.userPreferences.location,
+                        state.userPreferences.calculationMethod,
+                        state.userPreferences.madhab,
+                        state.userPreferences.highLatitudeRule,
+                        state.userPreferences.ishaExpiresAtMidnight,
+                        state.userPreferences.manualMinuteOffsets,
+                        state.userPreferences.themeMode,
+                        state.todayPrayerLog
+                    ) {
+                        if (!state.isPreferencesLoaded) return@LaunchedEffect
                         PrayerWidgetUpdater.updateAllWidgets(this@MainActivity)
                     }
 
@@ -245,14 +259,14 @@ class MainActivity : ComponentActivity() {
                                     selectedMadhab = state.userPreferences.madhab,
                                     isBatteryOptimizationGranted = isBatteryIgnored,
                                     isExactAlarmGranted = isExactAlarmGranted,
-                                    latitude = state.userPreferences.location.latitude,
-                                    longitude = state.userPreferences.location.longitude,
-                                    onRequestLocation = {},
+                                    isNotificationGranted = isNotificationGranted,
                                     onSelectCity = { viewModel.selectCity(it) },
-                                    onUpdateCustomCoordinates = { lat, lng, name ->
-                                        viewModel.updateLocation(lat, lng, name)
-                                    },
                                     onSelectMadhab = { viewModel.updateJuristicMethod(it) },
+                                    onRequestNotificationPermission = {
+                                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                        }
+                                    },
                                     onRequestBatteryOptimization = {
                                         OemPowerManager.openBatteryUsageSettings(this@MainActivity)
                                     },
@@ -278,8 +292,7 @@ class MainActivity : ComponentActivity() {
                                     onCycleFastStatus = { date -> viewModel.cycleFastStatus(date) },
                                     onUpdateQadhaMadeUp = { viewModel.updateQadhaMadeUp(it) },
                                     onUpdateSuhoorAlarm = { enabled, mins -> viewModel.updateSuhoorAlarm(enabled, mins) },
-                                    onUpdateIftarAlert = { viewModel.updateIftarAlert(it) },
-                                    onUpdateEidAlert = { viewModel.updateEidAlert(it) }
+                                    onUpdateIftarAlert = { viewModel.updateIftarAlert(it) }
                                 )
                             }
 
@@ -362,10 +375,7 @@ class MainActivity : ComponentActivity() {
                                                     onOpenTracker = { viewModel.setTrackerOpen(true) },
                                                     onOpenTahajjud = { viewModel.setTahajjudOpen(true) },
                                                     onOpenFridayGuide = { viewModel.setFridayGuideOpen(true) },
-                                                    onSelectCity = { viewModel.selectCity(it) },
-                                                    onUpdateLocation = { lat, lng, name ->
-                                                        viewModel.updateLocation(lat, lng, name)
-                                                    }
+                                                    onSelectCity = { viewModel.selectCity(it) }
                                                 )
                                             }
 
@@ -403,7 +413,6 @@ class MainActivity : ComponentActivity() {
                                                     onSelectFridayAutoMuteDuration = { viewModel.updateFridayAutoMuteDuration(it) },
                                                     onSelectAutoMuteTargetMode = { viewModel.updateAutoMuteTargetMode(it) },
                                                     onSelectMadhab = { viewModel.updateJuristicMethod(it) },
-                                                    onSelectCalculationMethod = { viewModel.updateCalculationMethod(it) },
                                                     onToggleIshaMidnight = { viewModel.updateIshaExpiresAtMidnight(it) },
                                                     onTogglePreReminder = { viewModel.togglePreReminder(it) },
                                                     onToggleLastCall = { viewModel.toggleLastCall(it) },
@@ -420,9 +429,6 @@ class MainActivity : ComponentActivity() {
                                                     },
                                                     onTriggerTestAlarm = { delaySeconds ->
                                                         viewModel.scheduleTestAlarm(delaySeconds)
-                                                    },
-                                                    onUpdateLocation = { lat, lng, name ->
-                                                        viewModel.updateLocation(lat, lng, name)
                                                     },
                                                     onSelectCity = { viewModel.selectCity(it) },
                                                     onOpenSetupGuide = { viewModel.openOnboarding() }
@@ -581,6 +587,7 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         checkPermissionsState()
+        viewModel.refreshNow()
 
         val app = application as? HayyaApplication ?: HayyaApplication.instance
         lifecycleScope.launch {
@@ -596,9 +603,16 @@ class MainActivity : ComponentActivity() {
         val missing = mutableListOf<String>()
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-                missing.add("Notifications (for Adhan alerts)")
+            val notifGranted = ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.POST_NOTIFICATIONS
+            ) == PackageManager.PERMISSION_GRANTED
+            isNotificationGrantedState.value = notifGranted
+            if (!notifGranted) {
+                missing.add("Notifications (for prayer alerts)")
             }
+        } else {
+            isNotificationGrantedState.value = true
         }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {

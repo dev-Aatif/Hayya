@@ -36,10 +36,15 @@ buildOutputCleanup/
 *.war
 *.ear
 
-# Keystore files & signing config
+# Keystore files, signing config & local secrets
 *.jks
 *.keystore
+*.p12
+*.pem
+*.key
 keystore.properties
+.env
+.env.*
 
 # External native build folder generated in Android Studio 2.2 and later
 .externalNativeBuild
@@ -60,15 +65,30 @@ google-services.json
 ehthumbs.db
 Thumbs.db
 
+# IDE / Editors
+.vscode/
+*.swp
+*.swo
+*~
+*.bak
+*.orig
+
 # Kotlin
 .kotlin/
 .kotlin
 *.kotlin_module
 
-# Android Profiling and Captures
+# Android Profiling, Captures & Logs
 /captures
 captures/
 *.hprof
+*.log
+hs_err_pid*
+replay_pid*
+
+# Release checksums / local distribution staging
+dist/
+*.apk.sha256
 
 # Graphify structural artifacts
 graphify-out/

@@ -216,4 +216,38 @@ class AutoMuteManagerTest {
         )
         assertThat(resultNegative).isFalse()
     }
+
+    @Test
+    fun activateAutoMute_whenAlreadyAutoMuted_preservesOriginalRingerModeAndVolumes() = runTest {
+        val existingOriginal = SavedRingerState(
+            ringerMode = AudioManager.RINGER_MODE_NORMAL,
+            ringVolume = 9,
+            notificationVolume = 7,
+            isAutoMuted = true,
+            endEpochMillis = System.currentTimeMillis() + 300_000L
+        )
+        every { repository.savedRingerStateFlow } returns flowOf(existingOriginal)
+        // Device is currently silenced by the active auto-mute
+        every { audioManager.ringerMode } returns AudioManager.RINGER_MODE_VIBRATE
+        every { audioManager.getStreamVolume(AudioManager.STREAM_RING) } returns 0
+        every { audioManager.getStreamVolume(AudioManager.STREAM_NOTIFICATION) } returns 0
+
+        val result = AutoMuteManager.activateAutoMute(
+            context = context,
+            durationMinutes = 45,
+            targetMode = AutoMuteTargetMode.VIBRATE,
+            repository = repository,
+            isFridayJumuah = true
+        )
+
+        assertThat(result).isTrue()
+        coVerify(exactly = 1) {
+            repository.saveRingerState(
+                ringerMode = AudioManager.RINGER_MODE_NORMAL,
+                ringVolume = 9,
+                notificationVolume = 7,
+                endEpochMillis = match { it >= System.currentTimeMillis() + 44 * 60_000L }
+            )
+        }
+    }
 }

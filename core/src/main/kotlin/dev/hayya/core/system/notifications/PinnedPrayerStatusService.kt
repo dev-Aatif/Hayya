@@ -253,10 +253,14 @@ class PinnedPrayerStatusService : Service() {
             val intent = Intent(context, PinnedPrayerStatusService::class.java).apply {
                 action = ACTION_START
             }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                context.startForegroundService(intent)
-            } else {
-                context.startService(intent)
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    context.startForegroundService(intent)
+                } else {
+                    context.startService(intent)
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Unable to start PinnedPrayerStatusService from current context", e)
             }
         }
 

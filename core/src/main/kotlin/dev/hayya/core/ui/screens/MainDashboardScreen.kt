@@ -98,7 +98,6 @@ fun MainDashboardScreen(
     onOpenTahajjud: () -> Unit = {},
     onOpenFridayGuide: () -> Unit = {},
     onSelectCity: (CityPreset) -> Unit = {},
-    onUpdateLocation: (Double, Double, String) -> Unit = { _, _, _ -> },
     modifier: Modifier = Modifier
 ) {
     var showCityPicker by remember { mutableStateOf(false) }
@@ -181,10 +180,7 @@ fun MainDashboardScreen(
     if (showCityPicker) {
         CityPickerBottomSheet(
             currentLocationName = state.locationName,
-            currentLat = state.userPreferences.location.latitude,
-            currentLng = state.userPreferences.location.longitude,
             onSelectCity = onSelectCity,
-            onSelectCustomCoordinates = onUpdateLocation,
             onDismiss = { showCityPicker = false }
         )
     }

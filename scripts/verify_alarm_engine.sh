@@ -65,7 +65,7 @@ pass "Device detected: $DEVICE_MODEL (Android $ANDROID_VER, SDK $SDK_VER)"
 # Ensure app is installed
 if ! adb shell pm list packages | grep -q "$PACKAGE_NAME"; then
     fail "Package $PACKAGE_NAME is not installed on the target device."
-    echo "Install via: ./gradlew assembleRelease && adb install -r core/build/outputs/apk/release/core-release.apk"
+    echo "Install via: ./gradlew :core:assembleRelease && adb install -r core/build/outputs/apk/release/core-release.apk"
     exit 1
 fi
 pass "Package $PACKAGE_NAME is installed on target."
@@ -169,25 +169,14 @@ fi
 # ------------------------------------------------------------------------------
 # Test 5: Real Scenario Lockscreen FullScreenIntent & Audio Simulation
 # ------------------------------------------------------------------------------
-header "TEST 5: Triggering 10-Second Test Alarm for Lockscreen Wake Activity"
+header "TEST 5: Live Lockscreen FullScreenIntent & Audio Simulation"
 
-info "Scheduling a live test alarm to trigger in exactly 10 seconds..."
-info "--> LOCK YOUR PHONE SCREEN NOW to observe the lockscreen wake up!"
-
-TRIGGER_TIME_MILLIS=$(( $(date +%s) * 1000 + 10000 ))
-
-# Dispatch test intent directly to PrayerAlarmReceiver
-adb shell am broadcast \
-    -a dev.hayya.alarm.ACTION_TRIGGER_PRAYER_ALARM \
-    -p "$PACKAGE_NAME" \
-    --ei extra_notification_id 999999 \
-    --es extra_prayer_type "ASR" \
-    --es extra_alert_tier "MAIN_CALL" \
-    --el extra_trigger_millis "$TRIGGER_TIME_MILLIS" > /dev/null
-
-info "Countdown: Waiting 10 seconds for alarm trigger..."
-for i in 10 9 8 7 6 5 4 3 2 1; do
-    echo -ne "  Firing in $i seconds...\r"
+info "Note: PrayerAlarmReceiver is intentionally android:exported=\"false\" for security."
+info "Open Hayya -> Settings -> Test Your Alarm (or Companion -> Test Your Alarm), select 10s, tap Start Test, and lock your phone screen."
+adb shell am start -n "$PACKAGE_NAME/$ACTIVITY_NAME" > /dev/null
+info "Waiting 15 seconds for manual test alarm trigger & lockscreen check..."
+for i in 15 14 13 12 11 10 9 8 7 6 5 4 3 2 1; do
+    echo -ne "  Monitoring in ${i}s...\r"
     sleep 1
 done
 echo -e "\n"
@@ -202,7 +191,7 @@ if [ -n "$RUNNING_ACTIVITY" ]; then
 elif [ -n "$RUNNING_SERVICE" ]; then
     pass "PrayerAudioService is actively playing prayer audio in the foreground!"
 else
-    pass "Prayer alarm broadcast was executed with high-priority WakeLock retention."
+    info "No active PrayerWakeActivity/PrayerAudioService detected within 15s (trigger from Settings -> Test Your Alarm to verify)."
 fi
 
 header "SUMMARY: All 5 Reliability Hardening Checks Completed Successfully!"

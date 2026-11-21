@@ -764,8 +764,17 @@ class PrayerViewModel(
             prayerType = nextPrayer,
             alertMode = alertMode,
             autoSilenceSeconds = timeoutSeconds,
-            showPostAdhanDua = currentPreferences.showPostAdhanDua
+            showPostAdhanDua = currentPreferences.showPostAdhanDua,
+            volumeEscalationSeconds = currentPreferences.volumeEscalation.seconds
         )
+    }
+
+    /**
+     * Forces an immediate recalculation of daily prayer times, Hijri date, and countdowns
+     * (e.g., when returning to the app after midnight or a timezone change).
+     */
+    fun refreshNow() {
+        refreshCalculation(clock.now().toEpochMilliseconds())
     }
 
     /**
@@ -943,9 +952,12 @@ class PrayerViewModel(
     private fun updateCountdownAndProgress(nowMillis: Long) {
         val currentState = _uiState.value
         val targetMillis = currentState.nextPrayerTimestampMillis
+        val currentLocalDate = Instant.fromEpochMilliseconds(nowMillis)
+            .toLocalDateTime(TimeZone.currentSystemDefault())
+            .date
 
-        if (targetMillis <= 0L || nowMillis >= targetMillis) {
-            // Target arrived, trigger full recalculation
+        if (targetMillis <= 0L || nowMillis >= targetMillis || currentDateState.value != currentLocalDate) {
+            // Target arrived or calendar date rolled over at midnight, trigger full recalculation
             refreshCalculation(nowMillis)
             return
         }

@@ -41,6 +41,10 @@ import kotlinx.coroutines.test.setMain
 import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.LocalDateTime
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toInstant
+import kotlinx.datetime.toLocalDateTime
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -282,6 +286,45 @@ class PrayerViewModelTest {
     }
 
     @Test
+    fun countdownTicker_refreshesDateAndDailyLogWhenCrossingMidnightBeforeFajr() = runTest(testDispatcher) {
+        val tz = TimeZone.currentSystemDefault()
+        val beforeMidnight = LocalDateTime(2026, 6, 15, 23, 59, 59).toInstant(tz).toEpochMilliseconds()
+        val afterMidnight = LocalDateTime(2026, 6, 16, 0, 0, 5).toInstant(tz).toEpochMilliseconds()
+        val fakeClock = MutableClock(beforeMidnight)
+        val midnightViewModel = PrayerViewModel(
+            calculationEngine = calculationEngine,
+            preferencesRepository = repository,
+            alarmScheduler = alarmScheduler,
+            prayerLogRepository = prayerLogRepository,
+            clock = fakeClock
+        )
+        try {
+            testDispatcher.scheduler.runCurrent()
+            // Mark a prayer completed on June 15
+            midnightViewModel.togglePrayerCompletion(PrayerType.FAJR)
+            testDispatcher.scheduler.runCurrent()
+            assertThat(midnightViewModel.uiState.value.todayPrayerLog.date).isEqualTo(LocalDate(2026, 6, 15))
+            assertThat(midnightViewModel.uiState.value.todayPrayerLog.completedCount).isEqualTo(1)
+
+            val job = backgroundScope.launch(testDispatcher) { midnightViewModel.uiState.collect { } }
+            testDispatcher.scheduler.runCurrent()
+
+            // Advance across midnight (before Fajr, so nextPrayerTimestampMillis has NOT elapsed yet)
+            fakeClock.nowMillis = afterMidnight
+            testDispatcher.scheduler.advanceTimeBy(1_000L)
+            testDispatcher.scheduler.runCurrent()
+
+            assertThat(midnightViewModel.uiState.value.todayPrayerLog.date).isEqualTo(LocalDate(2026, 6, 16))
+            assertThat(midnightViewModel.uiState.value.todayPrayerLog.completedCount).isEqualTo(0)
+            assertThat(midnightViewModel.uiState.value.islamicDateInfo.gregorianDate).isEqualTo(LocalDate(2026, 6, 16))
+            job.cancel()
+        } finally {
+            midnightViewModel.viewModelScope.cancel()
+            viewModel.viewModelScope.cancel()
+        }
+    }
+
+    @Test
     fun formatDuration_correctlyFormatsTabularHoursMinutesSeconds() {
         // 0 ms -> 00:00:00
         assertThat(PrayerViewModel.formatDuration(0L)).isEqualTo("00:00:00")
@@ -472,7 +515,8 @@ class PrayerViewModelTest {
                     prayerType = any(),
                     alertMode = any(),
                     autoSilenceSeconds = any(),
-                    showPostAdhanDua = any()
+                    showPostAdhanDua = any(),
+                    volumeEscalationSeconds = VolumeEscalationOption.SECONDS_20.seconds
                 )
             }
         } finally {

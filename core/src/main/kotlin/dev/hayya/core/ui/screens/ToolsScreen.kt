@@ -230,7 +230,7 @@ fun ToolsScreen(
 
                 QuickExtraRowCard(
                     title = "Test Your Alarm",
-                    subtitle = "Preview the Adhan sound and lockscreen wake",
+                    subtitle = "Preview the alarm tone and lockscreen wake",
                     icon = Icons.Default.Alarm,
                     onClick = { showAlarmSimulatorSheet = true }
                 )

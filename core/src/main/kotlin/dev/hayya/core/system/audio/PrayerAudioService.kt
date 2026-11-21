@@ -16,6 +16,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
+import android.provider.Settings
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
@@ -100,6 +101,14 @@ class PrayerAudioService : Service() {
         val soundUri = soundUriString?.let { Uri.parse(it) }
             ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
             ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+            ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
+            ?: Settings.System.DEFAULT_ALARM_ALERT_URI
+
+        if (soundUri == null) {
+            Log.e(TAG, "No default alarm or notification sound URI available on device")
+            stopPlaybackAndSelf()
+            return
+        }
 
         try {
             val audioAttributes = AudioAttributes.Builder()

@@ -102,7 +102,6 @@ fun RamadanScreen(
     onUpdateQadhaMadeUp: (Int) -> Unit,
     onUpdateSuhoorAlarm: (Boolean, Int?) -> Unit,
     onUpdateIftarAlert: (Boolean) -> Unit,
-    onUpdateEidAlert: (Boolean) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var selectedSection by remember { mutableStateOf(RamadanHubSection.TRACKER) }
@@ -206,8 +205,7 @@ fun RamadanScreen(
                         AlertsSection(
                             settings = state.ramadanSettings,
                             onUpdateSuhoorAlarm = onUpdateSuhoorAlarm,
-                            onUpdateIftarAlert = onUpdateIftarAlert,
-                            onUpdateEidAlert = onUpdateEidAlert
+                            onUpdateIftarAlert = onUpdateIftarAlert
                         )
                     }
                 }
@@ -1097,8 +1095,7 @@ private fun EidSection() {
 private fun AlertsSection(
     settings: RamadanSettings,
     onUpdateSuhoorAlarm: (Boolean, Int?) -> Unit,
-    onUpdateIftarAlert: (Boolean) -> Unit,
-    onUpdateEidAlert: (Boolean) -> Unit
+    onUpdateIftarAlert: (Boolean) -> Unit
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Card(

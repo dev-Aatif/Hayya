@@ -1,6 +1,5 @@
 package dev.hayya.core.ui.components
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
@@ -35,19 +34,15 @@ import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.NotificationsActive
 import androidx.compose.material.icons.outlined.NotificationsOff
 import androidx.compose.material.icons.outlined.Search
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -415,7 +410,7 @@ fun SolarSkyArc(
 }
 
 /**
- * Readable, friendly alert mode badge with icon + short clear label ("Adhan", "Banner", "Muted").
+ * Readable, friendly alert mode badge with icon + short clear label ("Alarm", "Silent", "Off").
  */
 @Composable
 fun AlertModeBadge(
@@ -426,7 +421,7 @@ fun AlertModeBadge(
     val (icon, label, containerColor, contentColor) = when (mode) {
         AlertMode.FULL_ALARM -> Quad(
             Icons.Outlined.NotificationsActive,
-            "Adhan",
+            "Alarm",
             MaterialTheme.colorScheme.primary.copy(alpha = 0.14f),
             MaterialTheme.colorScheme.primary
         )
@@ -568,26 +563,18 @@ fun SectionPageHeader(
 }
 
 /**
- * Offline City Picker Bottom Sheet with search, popular cities, and optional custom coordinates.
- * Makes picking any global city effortless for both a 10-year-old and a 40-year-old.
+ * Offline City Picker Bottom Sheet strictly scoped to Pakistan (Larkana Division in V1)
+ * with district filters, search, and major town quick-picks.
  */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun CityPickerBottomSheet(
     currentLocationName: String,
-    currentLat: Double,
-    currentLng: Double,
     onSelectCity: (CityPreset) -> Unit,
-    onSelectCustomCoordinates: (Double, Double, String) -> Unit,
     onDismiss: () -> Unit
 ) {
     var searchQuery by remember { mutableStateOf("") }
     var selectedFilter by remember { mutableStateOf("All Towns") }
-    var showCustomCoords by remember { mutableStateOf(false) }
-    var cityInput by remember(currentLocationName) { mutableStateOf(currentLocationName) }
-    var latInput by remember(currentLat) { mutableStateOf(currentLat.toString()) }
-    var lngInput by remember(currentLng) { mutableStateOf(currentLng.toString()) }
-    var coordError by remember { mutableStateOf<String?>(null) }
 
     val filterOptions = listOf(
         "All Towns",
@@ -632,334 +619,233 @@ fun CityPickerBottomSheet(
                 .padding(horizontal = 20.dp)
                 .padding(bottom = 28.dp)
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column {
-                    Text(
-                        text = "Choose Your Town",
-                        style = MaterialTheme.typography.titleLarge.copy(
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
+            Column {
+                Text(
+                    text = "Choose Your Town",
+                    style = MaterialTheme.typography.titleLarge.copy(
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
                     )
-                    Text(
-                        text = "Larkana Division • Works 100% offline",
-                        style = MaterialTheme.typography.bodySmall.copy(
-                            fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                )
+                Text(
+                    text = "Pakistan • Larkana Division • Works 100% offline",
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                }
-
-                TextButton(onClick = { showCustomCoords = !showCustomCoords }) {
-                    Text(
-                        text = if (showCustomCoords) "City List" else "Coordinates",
-                        style = MaterialTheme.typography.labelLarge.copy(
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    )
-                }
+                )
             }
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            AnimatedVisibility(visible = !showCustomCoords) {
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    // Search Box
-                    OutlinedTextField(
-                        value = searchQuery,
-                        onValueChange = { searchQuery = it },
-                        placeholder = { Text("Search town, taluka, or district...") },
-                        leadingIcon = {
-                            Icon(
-                                imageVector = Icons.Outlined.Search,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        },
-                        trailingIcon = {
-                            if (searchQuery.isNotEmpty()) {
-                                IconButton(onClick = { searchQuery = "" }) {
-                                    Icon(
-                                        imageVector = Icons.Outlined.Close,
-                                        contentDescription = "Clear search",
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                }
+            Column(modifier = Modifier.fillMaxWidth()) {
+                // Search Box
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    placeholder = { Text("Search town, taluka, or district...") },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Outlined.Search,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    },
+                    trailingIcon = {
+                        if (searchQuery.isNotEmpty()) {
+                            IconButton(onClick = { searchQuery = "" }) {
+                                Icon(
+                                    imageVector = Icons.Outlined.Close,
+                                    contentDescription = "Clear search",
+                                    modifier = Modifier.size(18.dp)
+                                )
                             }
-                        },
-                        singleLine = true,
-                        shape = RoundedCornerShape(14.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = MaterialTheme.colorScheme.primary,
-                            unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant
-                        ),
-                        modifier = Modifier.fillMaxWidth()
+                        }
+                    },
+                    singleLine = true,
+                    shape = RoundedCornerShape(14.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // District Filter Pills (Larkana Division)
+                LazyRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    items(filterOptions) { filter ->
+                        val isSelected = filter == selectedFilter
+                        Surface(
+                            shape = CircleShape,
+                            color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainer,
+                            border = BorderStroke(
+                                1.dp,
+                                if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+                            ),
+                            modifier = Modifier
+                                .clip(CircleShape)
+                                .clickable { selectedFilter = filter }
+                        ) {
+                            Text(
+                                text = filter,
+                                style = MaterialTheme.typography.labelMedium.copy(
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                    color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+                                ),
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                            )
+                        }
+                    }
+                }
+
+                if (searchQuery.isBlank() && selectedFilter == "All Towns") {
+                    Spacer(modifier = Modifier.height(14.dp))
+                    Text(
+                        text = "Major Towns in Larkana Division",
+                        style = MaterialTheme.typography.labelMedium.copy(
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     )
-
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    // Region Filter Pills (quick access to Pakistan & provinces)
-                    LazyRow(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        items(filterOptions) { filter ->
-                            val isSelected = filter == selectedFilter
+                        CityCatalog.popularCities.forEach { city ->
+                            val isCurrent = currentLocationName.contains(city.name, ignoreCase = true)
                             Surface(
                                 shape = CircleShape,
-                                color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainer,
+                                color = if (isCurrent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainer,
                                 border = BorderStroke(
                                     1.dp,
-                                    if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+                                    if (isCurrent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
                                 ),
                                 modifier = Modifier
                                     .clip(CircleShape)
-                                    .clickable { selectedFilter = filter }
+                                    .clickable {
+                                        onSelectCity(city)
+                                        onDismiss()
+                                    }
                             ) {
                                 Text(
-                                    text = filter,
+                                    text = city.name,
                                     style = MaterialTheme.typography.labelMedium.copy(
-                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                        color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = if (isCurrent) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
                                     ),
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp)
                                 )
                             }
                         }
                     }
+                }
 
-                    if (searchQuery.isBlank() && selectedFilter == "All Towns") {
-                        Spacer(modifier = Modifier.height(14.dp))
-                        Text(
-                            text = "Major Towns in Larkana Division",
-                            style = MaterialTheme.typography.labelMedium.copy(
-                                fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        FlowRow(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            CityCatalog.popularCities.forEach { city ->
-                                val isCurrent = currentLocationName.contains(city.name, ignoreCase = true)
-                                Surface(
-                                    shape = CircleShape,
-                                    color = if (isCurrent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainer,
-                                    border = BorderStroke(
-                                        1.dp,
-                                        if (isCurrent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                                    ),
-                                    modifier = Modifier
-                                        .clip(CircleShape)
-                                        .clickable {
-                                            onSelectCity(city)
-                                            onDismiss()
-                                        }
-                                ) {
-                                    Text(
-                                        text = city.name,
-                                        style = MaterialTheme.typography.labelMedium.copy(
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = if (isCurrent) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
-                                        ),
-                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp)
+                Spacer(modifier = Modifier.height(14.dp))
+
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 180.dp, max = 330.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    if (filteredCities.isEmpty()) {
+                        item {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 24.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Text(
+                                    text = "No matching town found",
+                                    style = MaterialTheme.typography.bodyMedium.copy(
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = MaterialTheme.colorScheme.onSurface
                                     )
-                                }
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = "Try searching another town or district in Larkana Division.",
+                                    style = MaterialTheme.typography.bodySmall.copy(
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                )
                             }
                         }
-                    }
-
-                    Spacer(modifier = Modifier.height(14.dp))
-
-                    LazyColumn(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(min = 180.dp, max = 330.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        if (filteredCities.isEmpty()) {
-                            item {
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(vertical = 24.dp),
-                                    horizontalAlignment = Alignment.CenterHorizontally
-                                ) {
-                                    Text(
-                                        text = "No matching city found",
-                                        style = MaterialTheme.typography.bodyMedium.copy(
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = MaterialTheme.colorScheme.onSurface
-                                        )
-                                    )
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    Text(
-                                        text = "Tap 'Coordinates' above to enter custom latitude and longitude.",
-                                        style = MaterialTheme.typography.bodySmall.copy(
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    )
-                                }
-                            }
-                        } else {
-                            items(filteredCities, key = { "${it.name}-${it.district}-${it.country}" }) { city ->
-                                val isCurrent = currentLocationName.equals(city.displayTitle, ignoreCase = true) ||
-                                    currentLocationName.equals(city.name, ignoreCase = true)
-                                Surface(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clip(RoundedCornerShape(12.dp))
-                                        .clickable {
-                                            onSelectCity(city)
-                                            onDismiss()
-                                        },
-                                    shape = RoundedCornerShape(12.dp),
-                                    color = if (isCurrent) {
-                                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f)
-                                    } else {
-                                        MaterialTheme.colorScheme.surfaceContainer
+                    } else {
+                        items(filteredCities, key = { "${it.name}-${it.district}-${it.country}" }) { city ->
+                            val isCurrent = currentLocationName.equals(city.displayTitle, ignoreCase = true) ||
+                                currentLocationName.equals(city.name, ignoreCase = true)
+                            Surface(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .clickable {
+                                        onSelectCity(city)
+                                        onDismiss()
                                     },
-                                    border = BorderStroke(
-                                        1.dp,
-                                        if (isCurrent) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
-                                        else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f)
-                                    )
+                                shape = RoundedCornerShape(12.dp),
+                                color = if (isCurrent) {
+                                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f)
+                                } else {
+                                    MaterialTheme.colorScheme.surfaceContainer
+                                },
+                                border = BorderStroke(
+                                    1.dp,
+                                    if (isCurrent) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
+                                    else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f)
+                                )
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 14.dp, vertical = 12.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(horizontal = 14.dp, vertical = 12.dp),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                        modifier = Modifier.weight(1f)
                                     ) {
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                            modifier = Modifier.weight(1f)
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Outlined.LocationOn,
-                                                contentDescription = null,
-                                                tint = if (isCurrent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                                modifier = Modifier.size(18.dp)
+                                        Icon(
+                                            imageVector = Icons.Outlined.LocationOn,
+                                            contentDescription = null,
+                                            tint = if (isCurrent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                        Column {
+                                            Text(
+                                                text = city.name,
+                                                style = MaterialTheme.typography.titleSmall.copy(
+                                                    fontWeight = FontWeight.SemiBold,
+                                                    color = MaterialTheme.colorScheme.onSurface
+                                                )
                                             )
-                                            Column {
-                                                Text(
-                                                    text = city.name,
-                                                    style = MaterialTheme.typography.titleSmall.copy(
-                                                        fontWeight = FontWeight.SemiBold,
-                                                        color = MaterialTheme.colorScheme.onSurface
-                                                    )
+                                            Text(
+                                                text = city.subtitleLabel,
+                                                style = MaterialTheme.typography.bodySmall.copy(
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
                                                 )
-                                                Text(
-                                                    text = city.subtitleLabel,
-                                                    style = MaterialTheme.typography.bodySmall.copy(
-                                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                                    )
-                                                )
-                                            }
-                                        }
-                                        if (isCurrent) {
-                                            Icon(
-                                                imageVector = Icons.Outlined.Check,
-                                                contentDescription = "Selected",
-                                                tint = MaterialTheme.colorScheme.primary,
-                                                modifier = Modifier.size(18.dp)
                                             )
                                         }
                                     }
+                                    if (isCurrent) {
+                                        Icon(
+                                            imageVector = Icons.Outlined.Check,
+                                            contentDescription = "Selected",
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
                                 }
                             }
-                        }
-                    }
-                }
-            }
-
-            AnimatedVisibility(visible = showCustomCoords) {
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    OutlinedTextField(
-                        value = cityInput,
-                        onValueChange = { cityInput = it },
-                        label = { Text("City / Place Name") },
-                        singleLine = true,
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Spacer(modifier = Modifier.height(10.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        OutlinedTextField(
-                            value = latInput,
-                            onValueChange = { latInput = it; coordError = null },
-                            label = { Text("Latitude") },
-                            singleLine = true,
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier.weight(1f)
-                        )
-                        OutlinedTextField(
-                            value = lngInput,
-                            onValueChange = { lngInput = it; coordError = null },
-                            label = { Text("Longitude") },
-                            singleLine = true,
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                    if (coordError != null) {
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Text(
-                            text = coordError!!,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.error
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        OutlinedButton(
-                            onClick = { showCustomCoords = false },
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(48.dp)
-                        ) {
-                            Text("Back to Cities")
-                        }
-                        Button(
-                            onClick = {
-                                val lat = latInput.trim().toDoubleOrNull()
-                                val lng = lngInput.trim().toDoubleOrNull()
-                                if (lat == null || lat !in -90.0..90.0 || lng == null || lng !in -180.0..180.0) {
-                                    coordError = "Latitude must be -90..90 and Longitude -180..180."
-                                } else {
-                                    onSelectCustomCoordinates(
-                                        lat,
-                                        lng,
-                                        cityInput.trim().ifEmpty { "Custom Location" }
-                                    )
-                                    onDismiss()
-                                }
-                            },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.primary,
-                                contentColor = MaterialTheme.colorScheme.onPrimary
-                            ),
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(48.dp)
-                        ) {
-                            Text("Save Location", fontWeight = FontWeight.Bold)
                         }
                     }
                 }

@@ -433,6 +433,10 @@ class UserPreferencesRepository(
 
         val calculationMethod = preferences[PreferenceKeys.CALCULATION_METHOD]?.let { name ->
             runCatching { CalculationMethodOption.valueOf(name) }.getOrNull()
+        }?.takeUnless {
+            it == CalculationMethodOption.TEHRAN ||
+                it == CalculationMethodOption.JAFARI ||
+                it == CalculationMethodOption.OTHER
         } ?: CalculationMethodOption.KARACHI
 
         val madhab = preferences[PreferenceKeys.MADHAB]?.let { name ->
@@ -496,8 +500,7 @@ class UserPreferencesRepository(
 
         val tahajjudAlarmEnabled = preferences[PreferenceKeys.TAHAJJUD_ALARM_ENABLED] ?: false
         val tahajjudAlarmMinutesOffset = preferences[PreferenceKeys.TAHAJJUD_ALARM_MINUTES_OFFSET] ?: 0
-        val hasCompletedOnboarding = preferences[PreferenceKeys.HAS_COMPLETED_ONBOARDING]
-            ?: (preferences[PreferenceKeys.LOCATION_NAME] != null)
+        val hasCompletedOnboarding = preferences[PreferenceKeys.HAS_COMPLETED_ONBOARDING] ?: false
         val tasbihCount = (preferences[PreferenceKeys.TASBIH_COUNT] ?: 0).coerceAtLeast(0)
         val tasbihMode = preferences[PreferenceKeys.TASBIH_MODE]?.let { name ->
             runCatching { TasbihTargetMode.valueOf(name) }.getOrNull()
