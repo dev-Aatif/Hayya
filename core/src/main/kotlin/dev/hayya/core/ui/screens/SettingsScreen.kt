@@ -33,11 +33,13 @@ import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.Shield
+import androidx.compose.material.icons.outlined.SystemUpdate
 import androidx.compose.material.icons.outlined.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -78,6 +80,7 @@ import dev.hayya.core.domain.model.PrayerType
 import dev.hayya.core.domain.model.ThemeModeOption
 import dev.hayya.core.domain.model.UserPreferences
 import dev.hayya.core.domain.model.VolumeEscalationOption
+import dev.hayya.core.domain.update.UpdateUiState
 import dev.hayya.core.system.audio.AutoMuteManager
 import dev.hayya.core.ui.components.CityPickerBottomSheet
 import dev.hayya.core.ui.components.SectionPageHeader
@@ -120,27 +123,30 @@ fun SettingsScreen(
     userPreferences: UserPreferences,
     isBatteryOptimizationIgnored: Boolean,
     onBackClick: () -> Unit,
-    onSelectThemeMode: (ThemeModeOption) -> Unit = {},
-    onToggleDynamicColor: (Boolean) -> Unit = {},
     onSelectAutoSilence: (AutoSilenceTimeout) -> Unit,
-    onSelectAutoMuteDuration: (AutoMuteDuration) -> Unit = {},
-    onSelectFridayAutoMuteDuration: (FridayAutoMuteDuration) -> Unit = {},
-    onSelectAutoMuteTargetMode: (AutoMuteTargetMode) -> Unit = {},
     onSelectMadhab: (MadhabOption) -> Unit,
     onToggleIshaMidnight: (Boolean) -> Unit,
     onTogglePreReminder: (Boolean) -> Unit,
     onToggleLastCall: (Boolean) -> Unit,
     onTogglePinnedNotification: (Boolean) -> Unit,
-    onTogglePostAdhanDua: (Boolean) -> Unit = {},
-    onSelectVolumeEscalation: (VolumeEscalationOption) -> Unit = {},
-    onToggleTahajjudAlarm: (Boolean) -> Unit = {},
     onSelectHighLatitudeRule: (HighLatitudeRuleOption) -> Unit,
     onUpdatePrayerOffset: (PrayerType, Int) -> Unit,
     onLaunchBatterySettings: () -> Unit,
     onTriggerTestAlarm: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+    onSelectThemeMode: (ThemeModeOption) -> Unit = {},
+    onToggleDynamicColor: (Boolean) -> Unit = {},
+    onSelectAutoMuteDuration: (AutoMuteDuration) -> Unit = {},
+    onSelectFridayAutoMuteDuration: (FridayAutoMuteDuration) -> Unit = {},
+    onSelectAutoMuteTargetMode: (AutoMuteTargetMode) -> Unit = {},
+    onTogglePostAdhanDua: (Boolean) -> Unit = {},
+    onSelectVolumeEscalation: (VolumeEscalationOption) -> Unit = {},
+    onToggleTahajjudAlarm: (Boolean) -> Unit = {},
     onSelectCity: (CityPreset) -> Unit = {},
     onOpenSetupGuide: () -> Unit = {},
-    modifier: Modifier = Modifier
+    updateState: UpdateUiState = UpdateUiState(),
+    onCheckForUpdates: () -> Unit = {},
+    onOpenUpdateDialog: () -> Unit = {}
 ) {
     var activeSubSection by remember { mutableStateOf<SettingsSubSection?>(null) }
 
@@ -157,8 +163,11 @@ fun SettingsScreen(
                 MainSettingsMenu(
                     userPreferences = userPreferences,
                     isBatteryOptimizationIgnored = isBatteryOptimizationIgnored,
+                    updateState = updateState,
                     onOpenSection = { activeSubSection = it },
-                    onOpenSetupGuide = onOpenSetupGuide
+                    onOpenSetupGuide = onOpenSetupGuide,
+                    onCheckForUpdates = onCheckForUpdates,
+                    onOpenUpdateDialog = onOpenUpdateDialog
                 )
             }
             SettingsSubSection.APPEARANCE -> {
@@ -218,8 +227,11 @@ fun SettingsScreen(
 private fun MainSettingsMenu(
     userPreferences: UserPreferences,
     isBatteryOptimizationIgnored: Boolean,
+    updateState: UpdateUiState,
     onOpenSection: (SettingsSubSection) -> Unit,
-    onOpenSetupGuide: () -> Unit
+    onOpenSetupGuide: () -> Unit,
+    onCheckForUpdates: () -> Unit,
+    onOpenUpdateDialog: () -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -437,7 +449,130 @@ private fun MainSettingsMenu(
             }
         }
 
-        Spacer(modifier = Modifier.height(110.dp))
+        Spacer(modifier = Modifier.height(14.dp))
+
+        // App Updates Card
+        val availableRelease = updateState.availableRelease
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(18.dp))
+                .clickable(enabled = !updateState.isChecking) {
+                    if (availableRelease != null) {
+                        onOpenUpdateDialog()
+                    } else {
+                        onCheckForUpdates()
+                    }
+                },
+            shape = RoundedCornerShape(18.dp),
+            color = if (availableRelease != null) {
+                MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+            } else {
+                MaterialTheme.colorScheme.surfaceContainer
+            },
+            border = BorderStroke(
+                1.dp,
+                if (availableRelease != null) {
+                    MaterialTheme.colorScheme.primary.copy(alpha = 0.45f)
+                } else {
+                    MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.30f)
+                }
+            )
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(38.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.primaryContainer),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.SystemUpdate,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(19.dp)
+                        )
+                    }
+                    Column {
+                        Text(
+                            text = if (availableRelease != null) {
+                                "Update Available • v${availableRelease.versionName}"
+                            } else {
+                                "App Updates"
+                            },
+                            style = MaterialTheme.typography.titleSmall.copy(
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        )
+                        val updateSubtitle = when {
+                            updateState.isChecking -> "Checking GitHub Releases…"
+                            updateState.isDownloading -> "Downloading update (${updateState.downloadProgressPercent}%)…"
+                            availableRelease != null -> "Tap to download and install"
+                            updateState.errorMessage != null -> updateState.errorMessage
+                            updateState.isUpToDateConfirmed -> "You're up to date (v${updateState.currentVersionName})"
+                            else -> "Version v${updateState.currentVersionName} • Tap to check"
+                        }
+                        Text(
+                            text = updateSubtitle,
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                color = when {
+                                    availableRelease != null -> MaterialTheme.colorScheme.primary
+                                    updateState.errorMessage != null -> MaterialTheme.colorScheme.error
+                                    else -> MaterialTheme.colorScheme.onSurfaceVariant
+                                }
+                            )
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                when {
+                    updateState.isChecking -> {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp
+                        )
+                    }
+                    availableRelease != null -> {
+                        Surface(
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.primary
+                        ) {
+                            Text(
+                                text = "Update",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onPrimary
+                                ),
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
+                    else -> {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowForwardIos,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                            modifier = Modifier.size(14.dp)
+                        )
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
     }
 }
 
@@ -533,7 +668,7 @@ private fun SubScreenContainer(
         )
         Spacer(modifier = Modifier.height(8.dp))
         content()
-        Spacer(modifier = Modifier.height(110.dp))
+        Spacer(modifier = Modifier.height(24.dp))
     }
 }
 
@@ -811,7 +946,7 @@ private fun CalculationSubScreen(
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = CalculationMethodOption.KARACHI.displayName,
+                            text = userPreferences.calculationMethod.displayName,
                             style = MaterialTheme.typography.titleSmall.copy(
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.primary

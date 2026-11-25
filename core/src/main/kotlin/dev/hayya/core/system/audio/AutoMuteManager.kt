@@ -234,18 +234,16 @@ object AutoMuteManager {
     }
 
     private fun ensureNotificationChannel(context: Context, notificationManager: NotificationManager) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                CHANNEL_ID,
-                "Congregational Prayer Auto-Mute",
-                NotificationManager.IMPORTANCE_LOW
-            ).apply {
-                description = "Shows active auto-mute status with quick restore action during congregational Salah"
-                setShowBadge(false)
-                enableVibration(false)
-                setSound(null, null)
-            }
-            notificationManager.createNotificationChannel(channel)
+        val channel = NotificationChannel(
+            CHANNEL_ID,
+            "Congregational Prayer Auto-Mute",
+            NotificationManager.IMPORTANCE_LOW
+        ).apply {
+            description = "Shows active auto-mute status with quick restore action during congregational Salah"
+            setShowBadge(false)
+            enableVibration(false)
+            setSound(null, null)
         }
+        notificationManager.createNotificationChannel(channel)
     }
 }

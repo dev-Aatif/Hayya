@@ -447,14 +447,9 @@ private fun triggerClockTickHaptic(view: View, context: Context) {
 private fun triggerMilestoneVibration(context: Context) {
     val vibrator = getVibrator(context) ?: return
     if (!vibrator.hasVibrator()) return
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-        val timings = longArrayOf(0, 50, 40, 110)
-        val amplitudes = intArrayOf(0, 220, 0, 255)
-        vibrator.vibrate(VibrationEffect.createWaveform(timings, amplitudes, -1))
-    } else {
-        @Suppress("DEPRECATION")
-        vibrator.vibrate(longArrayOf(0, 50, 40, 110), -1)
-    }
+    val timings = longArrayOf(0, 50, 40, 110)
+    val amplitudes = intArrayOf(0, 220, 0, 255)
+    vibrator.vibrate(VibrationEffect.createWaveform(timings, amplitudes, -1))
 }
 
 private fun getVibrator(context: Context): Vibrator? {

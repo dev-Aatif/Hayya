@@ -329,19 +329,17 @@ class PrayerAudioService : Service() {
     }
 
     private fun ensureNotificationChannel() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            val channel = NotificationChannel(
-                CHANNEL_ID,
-                "Adhan Audio Playback",
-                NotificationManager.IMPORTANCE_HIGH
-            ).apply {
-                description = "Foreground playback service for active prayer call"
-                setSound(null, null) // Audio is managed directly by MediaPlayer
-                enableVibration(false)
-            }
-            notificationManager.createNotificationChannel(channel)
+        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val channel = NotificationChannel(
+            CHANNEL_ID,
+            "Adhan Audio Playback",
+            NotificationManager.IMPORTANCE_HIGH
+        ).apply {
+            description = "Foreground playback service for active prayer call"
+            setSound(null, null) // Audio is managed directly by MediaPlayer
+            enableVibration(false)
         }
+        notificationManager.createNotificationChannel(channel)
     }
 
     override fun onDestroy() {

@@ -29,6 +29,10 @@
     <!-- Battery Optimization Exemption -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
+    <!-- In-App Update Engine (GitHub Releases check & APK installer) -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
     <!-- Optional Hardware Sensor Features for Offline Qibla Compass -->
     <uses-feature android:name="android.hardware.sensor.compass" android:required="false" />
     <uses-feature android:name="android.hardware.sensor.accelerometer" android:required="false" />
@@ -78,6 +82,7 @@
                 <action android:name="dev.hayya.alarm.ACTION_TRIGGER_SUHOOR_ALARM" />
                 <action android:name="dev.hayya.alarm.ACTION_TRIGGER_EID_NOTIFICATION" />
                 <action android:name="dev.hayya.alarm.ACTION_TRIGGER_TAHAJJUD_ALARM" />
+                <action android:name="dev.hayya.alarm.ACTION_TRIGGER_DAILY_HADITH" />
             </intent-filter>
         </receiver>
 
@@ -198,6 +203,17 @@
                 <action android:name="dev.hayya.widget.ACTION_PRAYER_DATA_CHANGED" />
             </intent-filter>
         </receiver>
+
+        <!-- FileProvider for installing downloaded update APKs -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
 
     </application>
 

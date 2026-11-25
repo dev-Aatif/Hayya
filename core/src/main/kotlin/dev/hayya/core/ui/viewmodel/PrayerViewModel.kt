@@ -33,9 +33,13 @@ import dev.hayya.core.domain.prayerlog.RollingPrayerHistory
 import dev.hayya.core.domain.qibla.QiblaCalculator
 import dev.hayya.core.domain.ramadan.*
 import dev.hayya.core.domain.tasbih.TasbihTargetMode
+import dev.hayya.core.domain.update.UpdateCheckResult
+import dev.hayya.core.domain.update.UpdateUiState
 import dev.hayya.core.system.alarm.PrayerAlarmScheduler
 import dev.hayya.core.system.audio.AutoMuteManager
+import dev.hayya.core.system.update.AppUpdateEngine
 import dev.hayya.core.ui.components.AppNavTab
+import java.io.File
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -136,7 +140,8 @@ data class PrayerDashboardUiState(
     val ishraqTimeFormatted: String = "",
     val zawalWindowFormatted: String = "",
     val mosqueSeasonLabel: String = "",
-    val isPreferencesLoaded: Boolean = false
+    val isPreferencesLoaded: Boolean = false,
+    val updateState: UpdateUiState = UpdateUiState()
 )
 
 /**
@@ -149,15 +154,23 @@ class PrayerViewModel(
     private val alarmScheduler: PrayerAlarmScheduler? = null,
     private val prayerLogRepository: PrayerLogRepository? = null,
     private val fastTrackerRepository: FastTrackerRepository? = null,
-    private val clock: Clock = Clock.System
+    private val clock: Clock = Clock.System,
+    private val updateEngine: AppUpdateEngine? = null
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(PrayerDashboardUiState())
+    private val _uiState = MutableStateFlow(
+        PrayerDashboardUiState(
+            updateState = UpdateUiState(
+                currentVersionName = updateEngine?.currentVersionName() ?: "1.0.0"
+            )
+        )
+    )
     val uiState: StateFlow<PrayerDashboardUiState> = _uiState.asStateFlow()
 
     private var currentPreferences = UserPreferences()
     private val currentDateState = MutableStateFlow<LocalDate?>(null)
     private var cachedDailyTimes: DailyPrayerTimes? = null
+    private var hasAttemptedLaunchUpdateCheck = false
 
     init {
         // Observe preferences and recalculate on changes
@@ -836,6 +849,241 @@ class PrayerViewModel(
         viewModelScope.launch {
             preferencesRepository.updateCoordinates(latitude, longitude, locationName = name)
             alarmScheduler?.scheduleRollingAlarms()
+        }
+    }
+
+    /**
+     * Checks GitHub Releases once on app launch when the throttle interval has elapsed.
+     */
+    fun checkForUpdatesOnLaunch() {
+        val engine = updateEngine ?: return
+        if (hasAttemptedLaunchUpdateCheck) return
+        hasAttemptedLaunchUpdateCheck = true
+
+        val nowMillis = clock.now().toEpochMilliseconds()
+        val lastChecked = currentPreferences.lastUpdateCheckEpochMillis
+        if (!engine.shouldAutoCheckOnLaunch(lastChecked, nowMillis)) {
+            return
+        }
+        checkForUpdates(manual = false)
+    }
+
+    /**
+     * Checks GitHub Releases for a newer version of Hayya.
+     * Manual checks surface errors and up-to-date confirmations; automatic checks fail quietly when offline.
+     */
+    fun checkForUpdates(manual: Boolean = true) {
+        val engine = updateEngine ?: return
+        val currentUpdate = _uiState.value.updateState
+        if (currentUpdate.isChecking || currentUpdate.isDownloading) return
+
+        viewModelScope.launch {
+            _uiState.update { state ->
+                state.copy(
+                    updateState = state.updateState.copy(
+                        isChecking = true,
+                        errorMessage = null,
+                        isUpToDateConfirmed = false
+                    )
+                )
+            }
+
+            val result = engine.checkForUpdate()
+            val nowMillis = clock.now().toEpochMilliseconds()
+            preferencesRepository.updateLastUpdateCheckEpochMillis(nowMillis)
+
+            when (result) {
+                is UpdateCheckResult.UpdateAvailable -> {
+                    val release = result.release
+                    val alreadyNotified = currentPreferences.lastNotifiedUpdateVersion == release.versionName
+                    if (!alreadyNotified) {
+                        engine.notifyUpdateAvailable(release)
+                        preferencesRepository.updateLastNotifiedUpdateVersion(release.versionName)
+                    }
+                    _uiState.update { state ->
+                        state.copy(
+                            updateState = state.updateState.copy(
+                                isChecking = false,
+                                availableRelease = release,
+                                isUpToDateConfirmed = false,
+                                lastCheckedEpochMillis = nowMillis,
+                                errorMessage = null,
+                                showUpdateDialog = manual || !alreadyNotified
+                            )
+                        )
+                    }
+                }
+
+                is UpdateCheckResult.UpToDate -> {
+                    _uiState.update { state ->
+                        state.copy(
+                            updateState = state.updateState.copy(
+                                isChecking = false,
+                                availableRelease = null,
+                                downloadedApkPath = null,
+                                isUpToDateConfirmed = manual,
+                                lastCheckedEpochMillis = nowMillis,
+                                errorMessage = null,
+                                showUpdateDialog = false
+                            )
+                        )
+                    }
+                }
+
+                is UpdateCheckResult.Failure -> {
+                    _uiState.update { state ->
+                        state.copy(
+                            updateState = state.updateState.copy(
+                                isChecking = false,
+                                isUpToDateConfirmed = false,
+                                lastCheckedEpochMillis = nowMillis,
+                                errorMessage = if (manual) result.message else null
+                            )
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    fun openUpdateDialog() {
+        _uiState.update { state ->
+            state.copy(
+                updateState = state.updateState.copy(
+                    showUpdateDialog = true,
+                    errorMessage = null
+                )
+            )
+        }
+    }
+
+    fun dismissUpdateDialog() {
+        _uiState.update { state ->
+            state.copy(
+                updateState = state.updateState.copy(
+                    showUpdateDialog = false,
+                    errorMessage = null
+                )
+            )
+        }
+    }
+
+    fun startUpdateDownloadAndInstall() {
+        val engine = updateEngine ?: return
+        val currentUpdate = _uiState.value.updateState
+        val release = currentUpdate.availableRelease ?: return
+        if (currentUpdate.isDownloading) return
+
+        if (!engine.canRequestPackageInstalls()) {
+            _uiState.update { state ->
+                state.copy(
+                    updateState = state.updateState.copy(
+                        needsInstallPermission = true,
+                        errorMessage = null
+                    )
+                )
+            }
+            return
+        }
+
+        viewModelScope.launch {
+            _uiState.update { state ->
+                state.copy(
+                    updateState = state.updateState.copy(
+                        isDownloading = true,
+                        downloadProgressPercent = 0,
+                        needsInstallPermission = false,
+                        errorMessage = null
+                    )
+                )
+            }
+
+            val downloadResult = engine.downloadAndVerifyApk(release) { percent ->
+                _uiState.update { state ->
+                    state.copy(
+                        updateState = state.updateState.copy(downloadProgressPercent = percent)
+                    )
+                }
+            }
+
+            downloadResult.fold(
+                onSuccess = { apkFile ->
+                    _uiState.update { state ->
+                        state.copy(
+                            updateState = state.updateState.copy(
+                                isDownloading = false,
+                                downloadProgressPercent = 100,
+                                downloadedApkPath = apkFile.absolutePath,
+                                errorMessage = null
+                            )
+                        )
+                    }
+                    val installResult = engine.launchApkInstaller(apkFile)
+                    if (installResult.isFailure) {
+                        _uiState.update { state ->
+                            state.copy(
+                                updateState = state.updateState.copy(
+                                    errorMessage = installResult.exceptionOrNull()?.message
+                                        ?: "Unable to open Android package installer."
+                                )
+                            )
+                        }
+                    }
+                },
+                onFailure = { error ->
+                    _uiState.update { state ->
+                        state.copy(
+                            updateState = state.updateState.copy(
+                                isDownloading = false,
+                                errorMessage = error.message ?: "Failed to download update."
+                            )
+                        )
+                    }
+                }
+            )
+        }
+    }
+
+    fun installDownloadedApk() {
+        val engine = updateEngine ?: return
+        val path = _uiState.value.updateState.downloadedApkPath ?: return
+        val apkFile = File(path)
+        if (!apkFile.exists()) {
+            _uiState.update { state ->
+                state.copy(
+                    updateState = state.updateState.copy(
+                        downloadedApkPath = null,
+                        errorMessage = "Cached APK was cleared. Please download again."
+                    )
+                )
+            }
+            return
+        }
+        if (!engine.canRequestPackageInstalls()) {
+            _uiState.update { state ->
+                state.copy(updateState = state.updateState.copy(needsInstallPermission = true))
+            }
+            return
+        }
+        val installResult = engine.launchApkInstaller(apkFile)
+        if (installResult.isFailure) {
+            _uiState.update { state ->
+                state.copy(
+                    updateState = state.updateState.copy(
+                        errorMessage = installResult.exceptionOrNull()?.message
+                            ?: "Unable to open Android package installer."
+                    )
+                )
+            }
+        }
+    }
+
+    fun refreshInstallPermissionState() {
+        val engine = updateEngine ?: return
+        if (_uiState.value.updateState.needsInstallPermission && engine.canRequestPackageInstalls()) {
+            _uiState.update { state ->
+                state.copy(updateState = state.updateState.copy(needsInstallPermission = false))
+            }
         }
     }
 

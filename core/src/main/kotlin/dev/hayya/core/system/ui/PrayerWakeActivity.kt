@@ -36,13 +36,19 @@ class PrayerWakeActivity : ComponentActivity() {
     private var subtitleState by mutableStateOf("")
     private var autoSilenceSecondsState by mutableIntStateOf(PrayerAudioService.DEFAULT_TIMEOUT_SECONDS)
     private var showPostAdhanDuaState by mutableStateOf(true)
+    private var isDuaSheetOpen = false
+    private var pendingFinishAfterDua = false
 
     private var receiverRegistered = false
     private val playbackFinishedReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action == PrayerAudioService.ACTION_PLAYBACK_FINISHED) {
                 cancelWakeNotification()
-                finish()
+                if (isDuaSheetOpen) {
+                    pendingFinishAfterDua = true
+                } else {
+                    finish()
+                }
             }
         }
     }
@@ -78,7 +84,14 @@ class PrayerWakeActivity : ComponentActivity() {
                         autoSilenceSeconds = autoSilenceSecondsState,
                         showPostAdhanDua = showPostAdhanDuaState,
                         onDismiss = { stopAlarm() },
-                        onMute = { muteAlarm() }
+                        onMute = { muteAlarm() },
+                        onDuaSheetVisibilityChange = { isOpen ->
+                            isDuaSheetOpen = isOpen
+                            if (!isOpen && pendingFinishAfterDua) {
+                                pendingFinishAfterDua = false
+                                finish()
+                            }
+                        }
                     )
                 }
             }

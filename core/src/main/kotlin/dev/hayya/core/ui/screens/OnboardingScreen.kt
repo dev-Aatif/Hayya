@@ -69,16 +69,16 @@ fun OnboardingScreen(
     selectedMadhab: MadhabOption,
     isBatteryOptimizationGranted: Boolean,
     isExactAlarmGranted: Boolean,
-    isNotificationGranted: Boolean = true,
-    isFullScreenIntentGranted: Boolean = true,
     onSelectCity: (CityPreset) -> Unit,
     onSelectMadhab: (MadhabOption) -> Unit,
-    onRequestNotificationPermission: () -> Unit = {},
     onRequestBatteryOptimization: () -> Unit,
     onRequestExactAlarm: () -> Unit,
-    onRequestFullScreenIntent: () -> Unit = {},
     onCompleteSetup: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    isNotificationGranted: Boolean = true,
+    isFullScreenIntentGranted: Boolean = true,
+    onRequestNotificationPermission: () -> Unit = {},
+    onRequestFullScreenIntent: () -> Unit = {}
 ) {
     var showCityPicker by remember { mutableStateOf(false) }
 

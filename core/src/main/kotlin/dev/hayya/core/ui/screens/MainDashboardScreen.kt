@@ -63,6 +63,7 @@ import dev.hayya.core.ui.components.AlertModeBadge
 import dev.hayya.core.ui.components.CityPickerBottomSheet
 import dev.hayya.core.ui.components.PrayerCelestialIcon
 import dev.hayya.core.ui.components.SolarSkyArc
+import dev.hayya.core.ui.components.UpdateAvailableBanner
 import dev.hayya.core.ui.components.friendlyPrayerName
 import dev.hayya.core.ui.components.prayerTimeOfDayHint
 import dev.hayya.core.ui.theme.HayyaTheme
@@ -85,9 +86,10 @@ fun MainDashboardScreen(
     state: PrayerDashboardUiState,
     onOpenSettings: () -> Unit,
     onOpenTasbih: () -> Unit,
+    onToggleAudioMode: (PrayerType) -> Unit,
+    modifier: Modifier = Modifier,
     onOpenQibla: () -> Unit = {},
     onOpenRamadan: () -> Unit = {},
-    onToggleAudioMode: (PrayerType) -> Unit,
     onTogglePrayerCompletion: (PrayerType) -> Unit = {},
     onToggleNightFastingCard: () -> Unit = {},
     onToggleTahajjudAlarm: (Boolean) -> Unit = {},
@@ -98,7 +100,7 @@ fun MainDashboardScreen(
     onOpenTahajjud: () -> Unit = {},
     onOpenFridayGuide: () -> Unit = {},
     onSelectCity: (CityPreset) -> Unit = {},
-    modifier: Modifier = Modifier
+    onOpenUpdateDialog: () -> Unit = {}
 ) {
     var showCityPicker by remember { mutableStateOf(false) }
 
@@ -126,6 +128,14 @@ fun MainDashboardScreen(
                 onOpenRamadan = onOpenRamadan,
                 onOpenFridayGuide = onOpenFridayGuide
             )
+
+            state.updateState.availableRelease?.let { release ->
+                Spacer(modifier = Modifier.height(10.dp))
+                UpdateAvailableBanner(
+                    release = release,
+                    onClick = onOpenUpdateDialog
+                )
+            }
 
             Spacer(modifier = Modifier.height(14.dp))
 
@@ -172,8 +182,8 @@ fun MainDashboardScreen(
                 onClick = onOpenTahajjud
             )
 
-            // Clearance above the floating pill dock
-            Spacer(modifier = Modifier.height(110.dp))
+            // Bottom breathing space above the docked navigation bar
+            Spacer(modifier = Modifier.height(24.dp))
         }
     }
 

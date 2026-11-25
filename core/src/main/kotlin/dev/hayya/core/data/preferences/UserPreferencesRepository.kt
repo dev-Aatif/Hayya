@@ -67,6 +67,8 @@ object PreferenceKeys {
     val TASBIH_COUNT = intPreferencesKey("pref_tasbih_count")
     val TASBIH_MODE = stringPreferencesKey("pref_tasbih_mode")
     val SALAWAT_COUNT = intPreferencesKey("pref_salawat_count")
+    val LAST_UPDATE_CHECK_EPOCH_MILLIS = longPreferencesKey("pref_last_update_check_epoch_millis")
+    val LAST_NOTIFIED_UPDATE_VERSION = stringPreferencesKey("pref_last_notified_update_version")
 
     fun offsetKeyFor(prayer: PrayerType): Preferences.Key<Int> =
         intPreferencesKey("pref_offset_${prayer.name.lowercase()}")
@@ -417,6 +419,24 @@ class UserPreferencesRepository(
     }
 
     /**
+     * Persists the timestamp of the last app update check.
+     */
+    suspend fun updateLastUpdateCheckEpochMillis(epochMillis: Long) {
+        dataStore.edit { preferences ->
+            preferences[PreferenceKeys.LAST_UPDATE_CHECK_EPOCH_MILLIS] = epochMillis.coerceAtLeast(0L)
+        }
+    }
+
+    /**
+     * Persists the latest release version for which an update notification was posted.
+     */
+    suspend fun updateLastNotifiedUpdateVersion(version: String) {
+        dataStore.edit { preferences ->
+            preferences[PreferenceKeys.LAST_NOTIFIED_UPDATE_VERSION] = version
+        }
+    }
+
+    /**
      * Resets all preferences to initial defaults.
      */
     suspend fun resetToDefaults() {
@@ -506,6 +526,8 @@ class UserPreferencesRepository(
             runCatching { TasbihTargetMode.valueOf(name) }.getOrNull()
         } ?: TasbihTargetMode.FATIMA_100
         val salawatCount = (preferences[PreferenceKeys.SALAWAT_COUNT] ?: 0).coerceAtLeast(0)
+        val lastUpdateCheckEpochMillis = preferences[PreferenceKeys.LAST_UPDATE_CHECK_EPOCH_MILLIS] ?: 0L
+        val lastNotifiedUpdateVersion = preferences[PreferenceKeys.LAST_NOTIFIED_UPDATE_VERSION]
 
         return UserPreferences(
             location = GeoLocation(lat, lng, alt, locationName),
@@ -532,7 +554,9 @@ class UserPreferencesRepository(
             hasCompletedOnboarding = hasCompletedOnboarding,
             tasbihCount = tasbihCount,
             tasbihMode = tasbihMode,
-            salawatCount = salawatCount
+            salawatCount = salawatCount,
+            lastUpdateCheckEpochMillis = lastUpdateCheckEpochMillis,
+            lastNotifiedUpdateVersion = lastNotifiedUpdateVersion
         )
     }
 }

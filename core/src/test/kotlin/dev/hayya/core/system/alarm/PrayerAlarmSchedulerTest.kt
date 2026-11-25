@@ -5,8 +5,10 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import com.google.common.truth.Truth.assertThat
+import dev.hayya.core.data.hadith.HadithPreferencesRepository
 import dev.hayya.core.domain.calculation.PrayerCalculationEngine
 import dev.hayya.core.domain.calculation.SolarAstronomicalCalculator
+import dev.hayya.core.domain.hadith.HadithUserPreferences
 import dev.hayya.core.domain.model.AlertMode
 import dev.hayya.core.domain.model.AlertTier
 import dev.hayya.core.domain.model.AutoSilenceTimeout
@@ -508,6 +510,69 @@ class PrayerAlarmSchedulerTest {
         verify(exactly = 1) {
             alarmManager.cancel(mockPendingIntent)
             mockPendingIntent.cancel()
+        }
+    }
+
+    @Test
+    fun scheduleRollingAlarms_schedulesAndCancelsDailySunriseHadith() = runTest {
+        val hadithPrefsRepo = mockk<HadithPreferencesRepository>()
+        every { hadithPrefsRepo.preferencesFlow } returns kotlinx.coroutines.flow.flowOf(
+            HadithUserPreferences(morningNotificationEnabled = true)
+        )
+        val sunriseScheduler = PrayerAlarmScheduler(
+            context = context,
+            calculationEngine = calculationEngine,
+            alarmManager = alarmManager,
+            hadithPreferencesRepository = hadithPrefsRepo
+        )
+
+        val date = LocalDate(2026, 6, 1)
+        val prefs = UserPreferences(preReminderEnabled = false, lastCallEnabled = false)
+        val clockSlots = mutableListOf<AlarmManager.AlarmClockInfo>()
+        every { alarmManager.setAlarmClock(capture(clockSlots), any()) } returns Unit
+
+        sunriseScheduler.scheduleRollingAlarms(
+            preferences = prefs,
+            startDate = date,
+            daysAhead = 1,
+            currentEpochMillis = 0L
+        )
+
+        // 5 obligatory prayers + 1 sunrise Hadith notification = 6
+        assertThat(clockSlots).hasSize(6)
+        verify(atLeast = 1) {
+            PendingIntent.getBroadcast(
+                context,
+                PrayerAlarmScheduler.NOTIFICATION_ID_DAILY_HADITH,
+                any<Intent>(),
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+        }
+
+        // Now verify disabling morningNotificationEnabled cancels the alarm
+        every { hadithPrefsRepo.preferencesFlow } returns kotlinx.coroutines.flow.flowOf(
+            HadithUserPreferences(morningNotificationEnabled = false)
+        )
+        val mockHadithPi = mockk<PendingIntent>(relaxed = true)
+        every {
+            PendingIntent.getBroadcast(
+                context,
+                PrayerAlarmScheduler.NOTIFICATION_ID_DAILY_HADITH,
+                any<Intent>(),
+                PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE
+            )
+        } returns mockHadithPi
+
+        sunriseScheduler.scheduleRollingAlarms(
+            preferences = prefs,
+            startDate = date,
+            daysAhead = 1,
+            currentEpochMillis = 0L
+        )
+
+        verify(atLeast = 1) {
+            alarmManager.cancel(mockHadithPi)
+            mockHadithPi.cancel()
         }
     }
 }

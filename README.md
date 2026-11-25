@@ -1,10 +1,10 @@
 # Hayya
 
-**An ultra-minimalist, 100% offline Islamic prayer reminder and spiritual companion app for Android.**
+**An ultra-minimalist, offline-first Islamic prayer reminder, Hadith hub, and spiritual companion app for Android.**
 
 Built with pure Kotlin, Jetpack Compose (Material 3), and Jetpack Glance AppWidgets, Hayya prioritizes deterministic astronomical accuracy, Doze-resilient exact alarms, and zero telemetry.
 
-> **Release V1 Scope — Pakistan (Larkana Division):** V1 is calibrated and verified for **Pakistan**, featuring complete offline directory coverage for **Larkana Division** (all 5 districts and 37 towns/talukas), University of Islamic Sciences, Karachi (`18.0° / 18.0°`) twilight angles, and Hanafi Asr defaults.
+> **Regional Scope — Pakistan (Larkana Division):** Calibrated and verified for **Pakistan**, featuring complete offline directory coverage for **Larkana Division** (all 5 districts and 37 towns/talukas), University of Islamic Sciences, Karachi (`18.0° / 18.0°`) twilight angles, and Hanafi Asr defaults.
 
 ---
 
@@ -16,14 +16,14 @@ Built with pure Kotlin, Jetpack Compose (Material 3), and Jetpack Glance AppWidg
 - [Permissions](#permissions)
 - [Tech Stack & Architecture](#tech-stack--architecture)
 - [Build & Verification](#build--verification)
-- [License](#license)
+- [Changelog & License](#changelog--license)
 
 ---
 
 ## Core Features
 
 ### Prayer Time & Astronomical Engine
-- **100% Offline & Private:** Zero internet permission, zero analytics, zero trackers. All prayer times, Hijri calendar dates (`java.time.chrono.HijrahDate`), Qibla bearings, and city coordinates execute locally on-device.
+- **Offline-First & Private:** Zero analytics, zero ads, zero trackers. All prayer times, Hijri calendar dates (`java.time.chrono.HijrahDate`), Qibla bearings, city coordinates, and bundled starter Hadiths execute locally on-device.
 - **Dual Astronomical Solver:** Powered by Batoul Apps `adhan` (`1.2.1`) with an offline Jean Meeus solar solver (`SolarAstronomicalCalculator`).
 - **Regional Mosque Conventions (`SindhMosqueSchedule`):** Models Sehri Ihtiyat (10m safety window), Ishraq, Zawal, pre-Maghrib Makrooh buffers, and seasonal Summer/Winter Adhan-to-Jama'at intervals.
 - **Larkana Division Offline Directory:** Covers 37 municipal corporations, taluka headquarters, and town committees across Larkana, Qambar Shahdadkot, Shikarpur, Jacobabad, and Kashmore.
@@ -33,7 +33,12 @@ Built with pure Kotlin, Jetpack Compose (Material 3), and Jetpack Glance AppWidg
 - **Familiar Alarm Audio:** Uses your device's default alarm tone (`RingtoneManager.TYPE_ALARM`) on `USAGE_ALARM`, with optional gradual volume escalation (`10s–30s`) and smooth 2-second fade-out.
 - **Mosque Auto-Silent (`AutoMuteManager`):** Automatically switches the ringer to Silent (via Do Not Disturb access) or Vibrate during Salah (`15–30m`) and Jumu'ah Khutbah (`45–60m`), saving and restoring exact prior ringer mode and stream volumes.
 
-### Spiritual Companion & Widgets
+### Hadith Hub & Shareable Status Cards
+- **Multilingual Offline Library:** Bundled authentic starter Hadiths across 5 spiritual pillars (Prayer & Worship, Creed, Virtues, Manners, Quran & Tafsir) in **Arabic, English, Urdu, and Sindhi**, stored locally in SQLite + FTS4 with Noto Naskh Arabic typography.
+- **Optional On-Demand Sync:** Download thematic packs from HadeethEnc.com (with Sindhi support) or full canonical Hadith collections (40 Nawawi, 40 Qudsi, Sahih al-Bukhari, Sahih Muslim, Tirmidhi, Abu Dawud, Nasa'i, Ibn Majah, Muwatta Malik) from `fawazahmed0/hadith-api`.
+- **WhatsApp Status Card Generator & Sunrise Reminder:** Export clean `9:16` or `1:1` PNG cards (`HadithStatusCardRenderer`) and receive an optional daily Sunrise Hadith notification.
+
+### Spiritual Companion, Widgets & In-App Updates
 - **Companion Suite:** Live Qibla compass (`QiblaOrientationSensor`), tactile OLED Tasbih counter, 7-day Prayer Habits tracker, Night & Tahajjud calculator (Islamic Midnight & Last Third), Friday (Jumu'ah) checklist & Salawat counter, and Ramadan & Eid Hub (30-day timetable, fast tracker, Qadha counter, Sunnah Duas, Suhoor wake-up alarm).
 - **5 Jetpack Glance Home Screen Widgets:**
   - `Hayya Next Prayer` (`2x2`) — Upcoming prayer, countdown, and window progress bar
@@ -41,21 +46,22 @@ Built with pure Kotlin, Jetpack Compose (Material 3), and Jetpack Glance AppWidg
   - `Hayya Daily Prayers` (`4x2`) — Interactive 1-tap prayer check-off tracker
   - `Hayya Quick Strip` (`4x1`) — Compact bar with interactive prayer completion pips
   - `Hayya Night & Fasting` (`3x2`) — Suhoor, Iftar, Last Third (Tahajjud), and Midnight times
+- **In-App GitHub Releases Updater (`AppUpdateEngine`):** Optional update checker against GitHub Releases with fail-closed SHA-256 verification and guided APK installation.
 - **Visual Craft:** Pure OLED Dark (`#07080A` / `#000000` lockscreen), Warm Sand Light (`#F8F4EC`), System Auto, optional Material You dynamic color (Android 12+), and `tnum` tabular figures for jitter-free countdowns.
 
 ---
 
 ## Download & Installation
 
-1. Download **`Hayya-v1.0.0.apk`** (and optionally **`Hayya-v1.0.0.apk.sha256`**) from the [GitHub Releases](../../releases) page.
+1. Download **`Hayya-v1.1.0.apk`** (and optionally **`Hayya-v1.1.0.apk.sha256`**) from the [GitHub Releases](../../releases) page.
 2. *(Optional)* Verify the APK integrity before installing:
    ```bash
-   sha256sum -c Hayya-v1.0.0.apk.sha256
+   sha256sum -c Hayya-v1.1.0.apk.sha256
    ```
 3. Install on **Android 8.0+ (API 26+)**:
    - Open the APK on your device and allow installation from your browser/file manager, **or** install via ADB:
      ```bash
-     adb install -r Hayya-v1.0.0.apk
+     adb install -r Hayya-v1.1.0.apk
      ```
 4. Complete the 3-step Welcome Setup to select your town in **Larkana Division**, choose your **Asr** juristic school (**Hanafi** or **Standard**), and grant **Notifications**, **Unrestricted Battery**, and **Exact Alarm** permissions.
 
@@ -82,6 +88,8 @@ Built with pure Kotlin, Jetpack Compose (Material 3), and Jetpack Glance AppWidg
 | `ACCESS_NOTIFICATION_POLICY` | Optional Mosque Auto-Silent Do Not Disturb control |
 | `FOREGROUND_SERVICE` (`MEDIA_PLAYBACK`, `SPECIAL_USE`) | Active alarm playback and optional pinned status notification |
 | `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` | Battery optimization check and OEM exemption shortcut |
+| `INTERNET` | Optional GitHub Releases update checks and on-demand Hadith library sync |
+| `REQUEST_INSTALL_PACKAGES` | User-initiated in-app APK installation from GitHub Releases |
 
 Hardware features `android.hardware.sensor.compass` and `android.hardware.sensor.accelerometer` are declared with `required="false"` for the offline Qibla compass.
 
@@ -91,13 +99,14 @@ Hardware features `android.hardware.sensor.compass` and `android.hardware.sensor
 
 - **Language & Build:** Kotlin `2.0.21`, Android Gradle Plugin `8.7.2`, JDK 17, `minSdk 26` / `targetSdk 36` / `compileSdk 36`
 - **UI & Widgets:** Jetpack Compose (BOM `2024.10.01`, Material 3), Jetpack Glance `1.1.1`
-- **Persistence & Time:** Jetpack DataStore Preferences `1.1.1`, `kotlinx-datetime` `0.6.0`, `kotlinx-coroutines` `1.8.1`
+- **Persistence & Time:** Jetpack DataStore Preferences `1.1.1`, SQLite + FTS4, `kotlinx-datetime` `0.6.0`, `kotlinx-coroutines` `1.8.1`
 - **Astronomical Engine:** `com.batoulapps.adhan:adhan:1.2.1`
 
 ```text
 core/src/main/kotlin/dev/hayya/core/
-├── HayyaApplication.kt                   # App-scoped DataStore, engine & scheduler singletons
+├── HayyaApplication.kt                   # App-scoped DataStore, engine, Hadith & updater singletons
 ├── data/
+│   ├── hadith/                           # HadithDatabase (SQLite+FTS4), sync clients & starter pack
 │   ├── preferences/                      # UserPreferencesRepository (DataStore)
 │   ├── prayerlog/                        # PrayerLogRepository (7-day prayer habit history)
 │   └── ramadan/                          # FastTrackerRepository (fasting log, Qadha & Suhoor)
@@ -105,25 +114,29 @@ core/src/main/kotlin/dev/hayya/core/
 │   ├── calculation/                      # Astronomical calculators, PrayerCalculationEngine,
 │   │                                     # NightFastingCalculator, SindhMosqueSchedule
 │   ├── friday/                           # FridayReminders (Surah Al-Kahf & Salawat)
+│   ├── hadith/                           # HadithModels, parsers, topic filter & daily selector
 │   ├── model/                            # PrayerModels, PreferenceModels, CityCatalog, PostAdhanDua
 │   ├── prayerlog/                        # DailyPrayerLog & RollingPrayerHistory
 │   ├── qibla/                            # QiblaCalculator (great-circle bearing & smoothing)
 │   ├── ramadan/                          # RamadanModels, RamadanDuasStore, EidGuide, Hijri helper
-│   └── tasbih/                           # TasbihModels & milestone helper
+│   ├── tasbih/                           # TasbihModels & milestone helper
+│   └── update/                           # UpdateModels, SemVer comparator & SimpleJsonParser
 ├── system/
 │   ├── alarm/                            # PrayerAlarmScheduler (7-day setAlarmClock queue)
 │   ├── audio/                            # PrayerAudioService & AutoMuteManager
+│   ├── hadith/                           # HadithStatusCardRenderer (PNG share cards)
 │   ├── notifications/                    # PinnedPrayerStatusService
 │   ├── oem/                              # OemPowerManager (battery & autostart settings)
 │   ├── receivers/                        # PrayerAlarmReceiver & SystemClockChangedReceiver
 │   ├── sensor/                           # QiblaOrientationSensor
-│   └── ui/                               # PrayerWakeActivity (lockscreen wake host)
+│   ├── ui/                               # PrayerWakeActivity (lockscreen wake host)
+│   └── update/                           # AppUpdateEngine (GitHub Releases & SHA-256 verifier)
 ├── ui/
-│   ├── MainActivity.kt                   # Root navigation, permissions & widget/FGS sync
-│   ├── components/                       # FloatingNavBar & VisualComponents
-│   ├── screens/                          # Dashboard, Companion, Settings, Onboarding & tools
+│   ├── MainActivity.kt                   # Root navigation, permissions, updater & FGS sync
+│   ├── components/                       # DockedNavBar, UpdateComponents & VisualComponents
+│   ├── screens/                          # Dashboard, Hadith, Companion, Settings, Onboarding & tools
 │   ├── theme/                            # OLED Dark, Warm Sand Light, Dynamic Color & typography
-│   └── viewmodel/                        # PrayerViewModel (StateFlow & 1s ticker)
+│   └── viewmodel/                        # PrayerViewModel & HadithViewModel (StateFlow)
 └── widget/                               # 5 Glance AppWidgets, receivers, updater & theme
 ```
 

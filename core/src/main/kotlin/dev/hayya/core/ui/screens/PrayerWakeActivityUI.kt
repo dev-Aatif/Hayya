@@ -86,13 +86,18 @@ fun PrayerWakeScreen(
     prayerName: String,
     windowExpiryText: String,
     autoSilenceSeconds: Int,
-    showPostAdhanDua: Boolean = true,
     onDismiss: () -> Unit,
     onMute: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    showPostAdhanDua: Boolean = true,
+    onDuaSheetVisibilityChange: (Boolean) -> Unit = {}
 ) {
     var remainingSilenceSeconds by remember { mutableIntStateOf(autoSilenceSeconds) }
     var showDuaSheet by remember { mutableStateOf(false) }
+
+    LaunchedEffect(showDuaSheet) {
+        onDuaSheetVisibilityChange(showDuaSheet)
+    }
 
     val resolvedPrayerType = remember(prayerName) {
         PrayerType.entries.find { it.name.equals(prayerName.trim(), ignoreCase = true) }

@@ -18,9 +18,12 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import dev.hayya.core.R
+import dev.hayya.core.data.hadith.HadithDatabase
+import dev.hayya.core.data.hadith.HadithPreferencesRepository
 import dev.hayya.core.data.preferences.UserPreferencesRepository
 import dev.hayya.core.data.ramadan.FastTrackerRepository
 import dev.hayya.core.domain.calculation.PrayerCalculationEngine
+import dev.hayya.core.domain.hadith.DailyHadithSelector
 import dev.hayya.core.domain.model.AlertMode
 import dev.hayya.core.domain.model.AlertTier
 import dev.hayya.core.domain.model.AutoMuteDuration
@@ -276,6 +279,82 @@ class PrayerAlarmReceiver : BroadcastReceiver() {
                 Log.e(TAG, "Error handling Tahajjud alarm", e)
                 if (wakeLock.isHeld) wakeLock.release()
                 pendingResult?.finish()
+            }
+            return
+        }
+
+        if (intent.action == PrayerAlarmScheduler.ACTION_TRIGGER_DAILY_HADITH) {
+            val pendingResult = goAsync()
+            val powerManager = context.getSystemService(Context.POWER_SERVICE) as PowerManager
+            val wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, WAKELOCK_TAG).apply {
+                setReferenceCounted(false)
+                acquire(10_000L)
+            }
+            CoroutineScope(Dispatchers.Default + SupervisorJob()).launch {
+                try {
+                    ensureNotificationChannels(context)
+                    val dataStore = PreferenceDataStoreProvider.getDataStore(context)
+                    val hadithPrefsRepo = HadithPreferencesRepository(dataStore)
+                    val hadithPrefs = hadithPrefsRepo.preferencesFlow.first()
+
+                    if (hadithPrefs.morningNotificationEnabled) {
+                        val db = HadithDatabase(context)
+                        db.ensureStarterSeeded()
+                        val pool = db.getPriorityPoolForDailySelection()
+                        val today = kotlinx.datetime.Instant
+                            .fromEpochMilliseconds(Clock.System.now().toEpochMilliseconds())
+                            .toLocalDateTime(TimeZone.currentSystemDefault())
+                            .date
+                        val hadith = DailyHadithSelector.selectForDate(pool, today)
+
+                        if (hadith != null) {
+                            val resolved = hadith.resolveTranslation(hadithPrefs.preferredLanguage)
+                            val openIntent = Intent(context, MainActivity::class.java).apply {
+                                flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                                putExtra(PrayerAlarmScheduler.EXTRA_OPEN_HADITH_ID, hadith.id)
+                            }
+                            val contentPi = PendingIntent.getActivity(
+                                context,
+                                PrayerAlarmScheduler.NOTIFICATION_ID_DAILY_HADITH,
+                                openIntent,
+                                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                            )
+
+                            val headline = resolved.variant.title.ifBlank { hadith.pillar.title }
+                            val bodyPreview = resolved.variant.matn
+                            val notification = NotificationCompat.Builder(context, CHANNEL_DAILY_HADITH)
+                                .setSmallIcon(R.drawable.ic_stat_hayya)
+                                .setContentTitle("Sunrise Hadith • ${hadith.pillar.title}")
+                                .setContentText(headline)
+                                .setStyle(
+                                    NotificationCompat.BigTextStyle()
+                                        .setBigContentTitle("Sunrise Hadith • $headline")
+                                        .bigText("$bodyPreview\n\n— ${hadith.attribution}")
+                                )
+                                .setContentIntent(contentPi)
+                                .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+                                .setAutoCancel(true)
+                                .build()
+
+                            notifySafely(context, PrayerAlarmScheduler.NOTIFICATION_ID_DAILY_HADITH, notification)
+                        }
+                    }
+
+                    val userPrefsRepo = UserPreferencesRepository(dataStore)
+                    val fastRepo = FastTrackerRepository(dataStore)
+                    PrayerAlarmScheduler(
+                        context = context,
+                        calculationEngine = PrayerCalculationEngine(),
+                        preferencesRepository = userPrefsRepo,
+                        fastTrackerRepository = fastRepo,
+                        hadithPreferencesRepository = hadithPrefsRepo
+                    ).scheduleRollingAlarms()
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error handling daily sunrise Hadith notification", e)
+                } finally {
+                    if (wakeLock.isHeld) wakeLock.release()
+                    pendingResult?.finish()
+                }
             }
             return
         }
@@ -604,92 +683,100 @@ class PrayerAlarmReceiver : BroadcastReceiver() {
     }
 
     private fun ensureNotificationChannels(context: Context) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
-            val reminderAudioAttributes = AudioAttributes.Builder()
-                .setUsage(AudioAttributes.USAGE_NOTIFICATION_EVENT)
-                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                .build()
+        val reminderAudioAttributes = AudioAttributes.Builder()
+            .setUsage(AudioAttributes.USAGE_NOTIFICATION_EVENT)
+            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+            .build()
 
-            val defaultNotificationSound = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+        val defaultNotificationSound = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
 
-            val preReminderChannel = NotificationChannel(
-                CHANNEL_PRE_REMINDER,
-                "Prayer Pre-Reminders (T - 15m)",
-                NotificationManager.IMPORTANCE_HIGH
-            ).apply {
-                description = "Gentle heads-up reminders 15 minutes prior to prayer times"
-                setSound(defaultNotificationSound, reminderAudioAttributes)
-                enableVibration(true)
-            }
-
-            val mainCallChannel = NotificationChannel(
-                CHANNEL_MAIN_CALL,
-                "Prayer Main Call (Adhan)",
-                NotificationManager.IMPORTANCE_HIGH
-            ).apply {
-                description = "Primary Adhan alarms and full-screen calls"
-                setSound(null, null) // Audio handled exclusively by PrayerAudioService
-                enableVibration(true)
-                setBypassDnd(true)
-            }
-
-            val gentleMainCallChannel = NotificationChannel(
-                CHANNEL_GENTLE_MAIN_CALL,
-                "Prayer Gentle Banner (Silent)",
-                NotificationManager.IMPORTANCE_HIGH
-            ).apply {
-                description = "Silent heads-up banner for prayers set to Gentle Banner mode"
-                setSound(null, null)
-                enableVibration(false)
-            }
-
-            val lastCallChannel = NotificationChannel(
-                CHANNEL_LAST_CALL,
-                "Prayer Last Call (T - 20m)",
-                NotificationManager.IMPORTANCE_HIGH
-            ).apply {
-                description = "Reminders 20 minutes before a prayer window concludes"
-                setSound(defaultNotificationSound, reminderAudioAttributes)
-                enableVibration(true)
-            }
-
-            val suhoorChannel = NotificationChannel(
-                CHANNEL_SUHOOR_REMINDER,
-                "Suhoor & Fasting Alerts",
-                NotificationManager.IMPORTANCE_HIGH
-            ).apply {
-                description = "Full-screen wake-up alarm and alerts before Fajr Suhoor cutoff"
-                setSound(null, null) // Audio handled exclusively by PrayerAudioService
-                enableVibration(true)
-                setBypassDnd(true)
-            }
-
-            val eidChannel = NotificationChannel(
-                CHANNEL_EID_CELEBRATION,
-                "Eid Greetings & Takbirat",
-                NotificationManager.IMPORTANCE_HIGH
-            ).apply {
-                description = "Special morning celebrations and Takbirat for Eid al-Fitr and Eid al-Adha"
-                setSound(defaultNotificationSound, reminderAudioAttributes)
-                enableVibration(true)
-            }
-
-            val tahajjudChannel = NotificationChannel(
-                CHANNEL_TAHAJJUD_REMINDER,
-                "Qiyam al-Layl & Tahajjud",
-                NotificationManager.IMPORTANCE_HIGH
-            ).apply {
-                description = "Gentle pre-alarm and wake reminders for Tahajjud prayer at the Last Third of the Night"
-                setSound(defaultNotificationSound, reminderAudioAttributes)
-                enableVibration(true)
-            }
-
-            notificationManager.createNotificationChannels(
-                listOf(preReminderChannel, mainCallChannel, gentleMainCallChannel, lastCallChannel, suhoorChannel, eidChannel, tahajjudChannel)
-            )
+        val preReminderChannel = NotificationChannel(
+            CHANNEL_PRE_REMINDER,
+            "Prayer Pre-Reminders (T - 15m)",
+            NotificationManager.IMPORTANCE_HIGH
+        ).apply {
+            description = "Gentle heads-up reminders 15 minutes prior to prayer times"
+            setSound(defaultNotificationSound, reminderAudioAttributes)
+            enableVibration(true)
         }
+
+        val mainCallChannel = NotificationChannel(
+            CHANNEL_MAIN_CALL,
+            "Prayer Main Call (Adhan)",
+            NotificationManager.IMPORTANCE_HIGH
+        ).apply {
+            description = "Primary Adhan alarms and full-screen calls"
+            setSound(null, null) // Audio handled exclusively by PrayerAudioService
+            enableVibration(true)
+            setBypassDnd(true)
+        }
+
+        val gentleMainCallChannel = NotificationChannel(
+            CHANNEL_GENTLE_MAIN_CALL,
+            "Prayer Gentle Banner (Silent)",
+            NotificationManager.IMPORTANCE_HIGH
+        ).apply {
+            description = "Silent heads-up banner for prayers set to Gentle Banner mode"
+            setSound(null, null)
+            enableVibration(false)
+        }
+
+        val lastCallChannel = NotificationChannel(
+            CHANNEL_LAST_CALL,
+            "Prayer Last Call (T - 20m)",
+            NotificationManager.IMPORTANCE_HIGH
+        ).apply {
+            description = "Reminders 20 minutes before a prayer window concludes"
+            setSound(defaultNotificationSound, reminderAudioAttributes)
+            enableVibration(true)
+        }
+
+        val suhoorChannel = NotificationChannel(
+            CHANNEL_SUHOOR_REMINDER,
+            "Suhoor & Fasting Alerts",
+            NotificationManager.IMPORTANCE_HIGH
+        ).apply {
+            description = "Full-screen wake-up alarm and alerts before Fajr Suhoor cutoff"
+            setSound(null, null) // Audio handled exclusively by PrayerAudioService
+            enableVibration(true)
+            setBypassDnd(true)
+        }
+
+        val eidChannel = NotificationChannel(
+            CHANNEL_EID_CELEBRATION,
+            "Eid Greetings & Takbirat",
+            NotificationManager.IMPORTANCE_HIGH
+        ).apply {
+            description = "Special morning celebrations and Takbirat for Eid al-Fitr and Eid al-Adha"
+            setSound(defaultNotificationSound, reminderAudioAttributes)
+            enableVibration(true)
+        }
+
+        val tahajjudChannel = NotificationChannel(
+            CHANNEL_TAHAJJUD_REMINDER,
+            "Qiyam al-Layl & Tahajjud",
+            NotificationManager.IMPORTANCE_HIGH
+        ).apply {
+            description = "Gentle pre-alarm and wake reminders for Tahajjud prayer at the Last Third of the Night"
+            setSound(defaultNotificationSound, reminderAudioAttributes)
+            enableVibration(true)
+        }
+
+        val dailyHadithChannel = NotificationChannel(
+            CHANNEL_DAILY_HADITH,
+            "Daily Sunrise Hadith",
+            NotificationManager.IMPORTANCE_DEFAULT
+        ).apply {
+            description = "Daily curated Prophetic Hadith reminder at sunrise"
+            setSound(defaultNotificationSound, reminderAudioAttributes)
+            enableVibration(false)
+        }
+
+        notificationManager.createNotificationChannels(
+            listOf(preReminderChannel, mainCallChannel, gentleMainCallChannel, lastCallChannel, suhoorChannel, eidChannel, tahajjudChannel, dailyHadithChannel)
+        )
     }
 
     companion object {
@@ -703,5 +790,6 @@ class PrayerAlarmReceiver : BroadcastReceiver() {
         const val CHANNEL_SUHOOR_REMINDER = "channel_suhoor_reminder"
         const val CHANNEL_EID_CELEBRATION = "channel_eid_celebration"
         const val CHANNEL_TAHAJJUD_REMINDER = "channel_tahajjud_reminder"
+        const val CHANNEL_DAILY_HADITH = "channel_daily_hadith"
     }
 }

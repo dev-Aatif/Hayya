@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -57,11 +58,15 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import dev.hayya.core.HayyaApplication
 import dev.hayya.core.domain.model.ThemeModeOption
+import dev.hayya.core.system.alarm.PrayerAlarmScheduler
 import dev.hayya.core.system.notifications.PinnedPrayerStatusService
 import dev.hayya.core.system.oem.OemPowerManager
+import dev.hayya.core.system.update.AppUpdateEngine
 import dev.hayya.core.ui.components.AppNavTab
-import dev.hayya.core.ui.components.FloatingNavBar
+import dev.hayya.core.ui.components.DockedNavBar
+import dev.hayya.core.ui.components.UpdateAvailableDialog
 import dev.hayya.core.ui.screens.FridayGuideScreen
+import dev.hayya.core.ui.screens.HadithScreen
 import dev.hayya.core.ui.screens.MainDashboardScreen
 import dev.hayya.core.ui.screens.OnboardingScreen
 import dev.hayya.core.ui.screens.PrayerTrackerScreen
@@ -72,6 +77,7 @@ import dev.hayya.core.ui.screens.TahajjudScreen
 import dev.hayya.core.ui.screens.TasbihScreen
 import dev.hayya.core.ui.screens.ToolsScreen
 import dev.hayya.core.ui.theme.HayyaTheme
+import dev.hayya.core.ui.viewmodel.HadithViewModel
 import dev.hayya.core.ui.viewmodel.PrayerViewModel
 import dev.hayya.core.widget.PrayerWidgetUpdater
 import kotlinx.coroutines.launch
@@ -111,7 +117,21 @@ class MainActivity : ComponentActivity() {
                     preferencesRepository = app.preferencesRepository,
                     alarmScheduler = app.alarmScheduler,
                     prayerLogRepository = app.prayerLogRepository,
-                    fastTrackerRepository = app.fastTrackerRepository
+                    fastTrackerRepository = app.fastTrackerRepository,
+                    updateEngine = app.updateEngine
+                ) as T
+            }
+        }
+    }
+
+    private val hadithViewModel: HadithViewModel by viewModels {
+        object : ViewModelProvider.Factory {
+            @Suppress("UNCHECKED_CAST")
+            override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                val app = application as? HayyaApplication ?: HayyaApplication.instance
+                return HadithViewModel(
+                    repository = app.hadithRepository,
+                    alarmScheduler = app.alarmScheduler
                 ) as T
             }
         }
@@ -155,6 +175,7 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val state by viewModel.uiState.collectAsStateWithLifecycle()
+            val hadithState by hadithViewModel.uiState.collectAsStateWithLifecycle()
             val themeMode = state.userPreferences.themeMode
             val dynamicColor = state.userPreferences.dynamicColorEnabled
             val systemInDark = isSystemInDarkTheme()
@@ -189,7 +210,7 @@ class MainActivity : ComponentActivity() {
                         if (!state.isPreferencesLoaded) return@LaunchedEffect
                         if (state.userPreferences.pinnedNotificationEnabled) {
                             PinnedPrayerStatusService.start(this@MainActivity)
-                        } else {
+                        } else if (PinnedPrayerStatusService.isRunning) {
                             PinnedPrayerStatusService.stop(this@MainActivity)
                         }
                     }
@@ -216,6 +237,12 @@ class MainActivity : ComponentActivity() {
                     }
 
                     val showOnboarding = !state.userPreferences.hasCompletedOnboarding || state.isOnboardingForced
+
+                    LaunchedEffect(state.isPreferencesLoaded, showOnboarding) {
+                        if (state.isPreferencesLoaded && !showOnboarding) {
+                            viewModel.checkForUpdatesOnLaunch()
+                        }
+                    }
 
                     val destination = when {
                         showOnboarding -> ActiveDestination.ONBOARDING
@@ -357,100 +384,154 @@ class MainActivity : ComponentActivity() {
                             }
 
                             ActiveDestination.MAIN_TABS -> {
-                                Box(modifier = Modifier.fillMaxSize()) {
-                                    Crossfade(
-                                        targetState = state.currentTab,
-                                        animationSpec = tween(durationMillis = 180),
-                                        label = "tab_crossfade"
-                                    ) { tab ->
-                                        when (tab) {
-                                            AppNavTab.DASHBOARD -> {
-                                                MainDashboardScreen(
-                                                    state = state,
-                                                    onOpenSettings = { viewModel.selectNavTab(AppNavTab.SETTINGS) },
-                                                    onOpenTasbih = { viewModel.setTasbihOpen(true) },
-                                                    onOpenQibla = { viewModel.setQiblaOpen(true) },
-                                                    onOpenRamadan = { viewModel.setRamadanOpen(true) },
-                                                    onToggleAudioMode = { viewModel.togglePrayerAudioMode(it) },
-                                                    onTogglePrayerCompletion = { viewModel.togglePrayerCompletion(it) },
-                                                    onToggleNightFastingCard = { viewModel.toggleNightFastingCardExpanded() },
-                                                    onToggleTahajjudAlarm = { viewModel.toggleTahajjudAlarm(it) },
-                                                    onToggleSurahKahfRead = { viewModel.toggleSurahKahfRead() },
-                                                    onActivateKhutbahMute = { viewModel.activateKhutbahAutoMute(this@MainActivity) },
-                                                    onRestoreRingerMode = { viewModel.restoreNormalRingerMode(this@MainActivity) },
-                                                    onOpenTracker = { viewModel.setTrackerOpen(true) },
-                                                    onOpenTahajjud = { viewModel.setTahajjudOpen(true) },
-                                                    onOpenFridayGuide = { viewModel.setFridayGuideOpen(true) },
-                                                    onSelectCity = { viewModel.selectCity(it) }
-                                                )
-                                            }
+                                Column(modifier = Modifier.fillMaxSize()) {
+                                    Box(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .fillMaxWidth()
+                                    ) {
+                                        Crossfade(
+                                            targetState = state.currentTab,
+                                            animationSpec = tween(durationMillis = 180),
+                                            label = "tab_crossfade"
+                                        ) { tab ->
+                                            when (tab) {
+                                                AppNavTab.DASHBOARD -> {
+                                                    MainDashboardScreen(
+                                                        state = state,
+                                                        onOpenSettings = { viewModel.selectNavTab(AppNavTab.SETTINGS) },
+                                                        onOpenTasbih = { viewModel.setTasbihOpen(true) },
+                                                        onOpenQibla = { viewModel.setQiblaOpen(true) },
+                                                        onOpenRamadan = { viewModel.setRamadanOpen(true) },
+                                                        onToggleAudioMode = { viewModel.togglePrayerAudioMode(it) },
+                                                        onTogglePrayerCompletion = { viewModel.togglePrayerCompletion(it) },
+                                                        onToggleNightFastingCard = { viewModel.toggleNightFastingCardExpanded() },
+                                                        onToggleTahajjudAlarm = { viewModel.toggleTahajjudAlarm(it) },
+                                                        onToggleSurahKahfRead = { viewModel.toggleSurahKahfRead() },
+                                                        onActivateKhutbahMute = { viewModel.activateKhutbahAutoMute(this@MainActivity) },
+                                                        onRestoreRingerMode = { viewModel.restoreNormalRingerMode(this@MainActivity) },
+                                                        onOpenTracker = { viewModel.setTrackerOpen(true) },
+                                                        onOpenTahajjud = { viewModel.setTahajjudOpen(true) },
+                                                        onOpenFridayGuide = { viewModel.setFridayGuideOpen(true) },
+                                                        onSelectCity = { viewModel.selectCity(it) },
+                                                        onOpenUpdateDialog = { viewModel.openUpdateDialog() }
+                                                    )
+                                                }
 
-                                            AppNavTab.TOOLS -> {
-                                                ToolsScreen(
-                                                    state = state,
-                                                    onOpenCompass = { viewModel.setQiblaOpen(true) },
-                                                    onOpenTasbih = { viewModel.setTasbihOpen(true) },
-                                                    onOpenRamadan = { viewModel.setRamadanOpen(true) },
-                                                    onIncrementTasbih = { viewModel.incrementTasbih() },
-                                                    onTogglePrayerCompletion = { viewModel.togglePrayerCompletion(it) },
-                                                    onTogglePostAdhanDua = { viewModel.togglePostAdhanDua(it) },
-                                                    onToggleTahajjudAlarm = { viewModel.toggleTahajjudAlarm(it) },
-                                                    onLaunchBatterySettings = {
-                                                        OemPowerManager.openBatteryUsageSettings(this@MainActivity)
-                                                    },
-                                                    onTriggerTestAlarm = { delaySeconds ->
-                                                        viewModel.scheduleTestAlarm(delaySeconds)
-                                                    },
-                                                    onOpenTracker = { viewModel.setTrackerOpen(true) },
-                                                    onOpenTahajjud = { viewModel.setTahajjudOpen(true) },
-                                                    onOpenFridayGuide = { viewModel.setFridayGuideOpen(true) }
-                                                )
-                                            }
+                                                AppNavTab.HADITH -> {
+                                                    HadithScreen(
+                                                        state = hadithState,
+                                                        onSelectLanguage = { hadithViewModel.setLanguage(it) },
+                                                        onToggleShowArabic = { hadithViewModel.toggleShowArabic() },
+                                                        onAdjustFontScale = { hadithViewModel.adjustFontScale(it) },
+                                                        onSelectFilter = { hadithViewModel.setFilter(it) },
+                                                        onSearchQueryChanged = { hadithViewModel.setSearchQuery(it) },
+                                                        onOpenHadith = { hadithViewModel.openHadith(it) },
+                                                        onCloseHadith = { hadithViewModel.closeHadith() },
+                                                        onToggleBookmark = { hadithViewModel.toggleBookmark(it) },
+                                                        onOpenShareSheet = { hadithViewModel.openShareSheet(it) },
+                                                        onCloseShareSheet = { hadithViewModel.closeShareSheet() },
+                                                        onOpenSyncSheet = { hadithViewModel.openSyncSheet() },
+                                                        onCloseSyncSheet = { hadithViewModel.closeSyncSheet() },
+                                                        onRefreshCategories = { hadithViewModel.refreshRemoteCategories() },
+                                                        onSyncCategory = { hadithViewModel.syncCategory(it) },
+                                                        onSelectBook = { hadithViewModel.selectBook(it) },
+                                                        onDownloadBook = { hadithViewModel.downloadBook(it) },
+                                                        onDeleteBook = { hadithViewModel.deleteBook(it) },
+                                                        onToggleMorningNotification = { hadithViewModel.toggleMorningNotification() }
+                                                    )
+                                                }
 
-                                            AppNavTab.SETTINGS -> {
-                                                SettingsScreen(
-                                                    userPreferences = state.userPreferences,
-                                                    isBatteryOptimizationIgnored = isBatteryIgnored,
-                                                    onBackClick = { viewModel.selectNavTab(AppNavTab.DASHBOARD) },
-                                                    onSelectThemeMode = { viewModel.updateThemeMode(it) },
-                                                    onToggleDynamicColor = { viewModel.updateDynamicColorEnabled(it) },
-                                                    onSelectAutoSilence = { viewModel.updateAutoSilence(it) },
-                                                    onSelectAutoMuteDuration = { viewModel.updateAutoMuteDuration(it) },
-                                                    onSelectFridayAutoMuteDuration = { viewModel.updateFridayAutoMuteDuration(it) },
-                                                    onSelectAutoMuteTargetMode = { viewModel.updateAutoMuteTargetMode(it) },
-                                                    onSelectMadhab = { viewModel.updateJuristicMethod(it) },
-                                                    onToggleIshaMidnight = { viewModel.updateIshaExpiresAtMidnight(it) },
-                                                    onTogglePreReminder = { viewModel.togglePreReminder(it) },
-                                                    onToggleLastCall = { viewModel.toggleLastCall(it) },
-                                                    onTogglePinnedNotification = { viewModel.togglePinnedNotification(it) },
-                                                    onTogglePostAdhanDua = { viewModel.togglePostAdhanDua(it) },
-                                                    onSelectVolumeEscalation = { viewModel.updateVolumeEscalation(it) },
-                                                    onToggleTahajjudAlarm = { viewModel.toggleTahajjudAlarm(it) },
-                                                    onSelectHighLatitudeRule = { viewModel.updateHighLatitudeRule(it) },
-                                                    onUpdatePrayerOffset = { prayer, offset ->
-                                                        viewModel.updatePrayerOffset(prayer, offset)
-                                                    },
-                                                    onLaunchBatterySettings = {
-                                                        OemPowerManager.openBatteryUsageSettings(this@MainActivity)
-                                                    },
-                                                    onTriggerTestAlarm = { delaySeconds ->
-                                                        viewModel.scheduleTestAlarm(delaySeconds)
-                                                    },
-                                                    onSelectCity = { viewModel.selectCity(it) },
-                                                    onOpenSetupGuide = { viewModel.openOnboarding() }
-                                                )
+                                                AppNavTab.TOOLS -> {
+                                                    ToolsScreen(
+                                                        state = state,
+                                                        onOpenCompass = { viewModel.setQiblaOpen(true) },
+                                                        onOpenTasbih = { viewModel.setTasbihOpen(true) },
+                                                        onOpenRamadan = { viewModel.setRamadanOpen(true) },
+                                                        onIncrementTasbih = { viewModel.incrementTasbih() },
+                                                        onTogglePrayerCompletion = { viewModel.togglePrayerCompletion(it) },
+                                                        onTogglePostAdhanDua = { viewModel.togglePostAdhanDua(it) },
+                                                        onToggleTahajjudAlarm = { viewModel.toggleTahajjudAlarm(it) },
+                                                        onLaunchBatterySettings = {
+                                                            OemPowerManager.openBatteryUsageSettings(this@MainActivity)
+                                                        },
+                                                        onTriggerTestAlarm = { delaySeconds ->
+                                                            viewModel.scheduleTestAlarm(delaySeconds)
+                                                        },
+                                                        onOpenTracker = { viewModel.setTrackerOpen(true) },
+                                                        onOpenTahajjud = { viewModel.setTahajjudOpen(true) },
+                                                        onOpenFridayGuide = { viewModel.setFridayGuideOpen(true) }
+                                                    )
+                                                }
+
+                                                AppNavTab.SETTINGS -> {
+                                                    SettingsScreen(
+                                                        userPreferences = state.userPreferences,
+                                                        isBatteryOptimizationIgnored = isBatteryIgnored,
+                                                        onBackClick = { viewModel.selectNavTab(AppNavTab.DASHBOARD) },
+                                                        onSelectThemeMode = { viewModel.updateThemeMode(it) },
+                                                        onToggleDynamicColor = { viewModel.updateDynamicColorEnabled(it) },
+                                                        onSelectAutoSilence = { viewModel.updateAutoSilence(it) },
+                                                        onSelectAutoMuteDuration = { viewModel.updateAutoMuteDuration(it) },
+                                                        onSelectFridayAutoMuteDuration = { viewModel.updateFridayAutoMuteDuration(it) },
+                                                        onSelectAutoMuteTargetMode = { viewModel.updateAutoMuteTargetMode(it) },
+                                                        onSelectMadhab = { viewModel.updateJuristicMethod(it) },
+                                                        onToggleIshaMidnight = { viewModel.updateIshaExpiresAtMidnight(it) },
+                                                        onTogglePreReminder = { viewModel.togglePreReminder(it) },
+                                                        onToggleLastCall = { viewModel.toggleLastCall(it) },
+                                                        onTogglePinnedNotification = { viewModel.togglePinnedNotification(it) },
+                                                        onTogglePostAdhanDua = { viewModel.togglePostAdhanDua(it) },
+                                                        onSelectVolumeEscalation = { viewModel.updateVolumeEscalation(it) },
+                                                        onToggleTahajjudAlarm = { viewModel.toggleTahajjudAlarm(it) },
+                                                        onSelectHighLatitudeRule = { viewModel.updateHighLatitudeRule(it) },
+                                                        onUpdatePrayerOffset = { prayer, offset ->
+                                                            viewModel.updatePrayerOffset(prayer, offset)
+                                                        },
+                                                        onLaunchBatterySettings = {
+                                                            OemPowerManager.openBatteryUsageSettings(this@MainActivity)
+                                                        },
+                                                        onTriggerTestAlarm = { delaySeconds ->
+                                                            viewModel.scheduleTestAlarm(delaySeconds)
+                                                        },
+                                                        onSelectCity = { viewModel.selectCity(it) },
+                                                        onOpenSetupGuide = { viewModel.openOnboarding() },
+                                                        updateState = state.updateState,
+                                                        onCheckForUpdates = { viewModel.checkForUpdates(manual = true) },
+                                                        onOpenUpdateDialog = { viewModel.openUpdateDialog() }
+                                                    )
+                                                }
                                             }
                                         }
                                     }
 
-                                    FloatingNavBar(
+                                    DockedNavBar(
                                         currentTab = state.currentTab,
                                         onTabSelected = { viewModel.selectNavTab(it) },
-                                        modifier = Modifier.align(Alignment.BottomCenter)
+                                        hasUpdateAvailable = state.updateState.availableRelease != null
                                     )
                                 }
                             }
                         }
+                    }
+
+                    // In-App Update Dialog
+                    if (state.updateState.showUpdateDialog && state.updateState.availableRelease != null) {
+                        UpdateAvailableDialog(
+                            updateState = state.updateState,
+                            onDownloadAndInstall = { viewModel.startUpdateDownloadAndInstall() },
+                            onInstallDownloaded = { viewModel.installDownloadedApk() },
+                            onOpenInstallPermissionSettings = {
+                                runCatching {
+                                    startActivity(app.updateEngine.createUnknownSourcesSettingsIntent())
+                                }
+                            },
+                            onOpenInBrowser = { url ->
+                                runCatching {
+                                    startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                                }
+                            },
+                            onDismiss = { viewModel.dismissUpdateDialog() }
+                        )
                     }
 
                     // Exit Confirmation Dialog
@@ -574,6 +655,19 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun handleWidgetNavigationIntent(intent: Intent?) {
+        intent?.getStringExtra(PrayerAlarmScheduler.EXTRA_OPEN_HADITH_ID)
+            ?.takeIf { it.isNotBlank() }
+            ?.let { hadithId ->
+                viewModel.selectNavTab(AppNavTab.HADITH)
+                hadithViewModel.openHadithById(hadithId)
+            }
+        if (intent?.getBooleanExtra(AppUpdateEngine.EXTRA_OPEN_UPDATE_DIALOG, false) == true) {
+            if (viewModel.uiState.value.updateState.availableRelease != null) {
+                viewModel.openUpdateDialog()
+            } else {
+                viewModel.checkForUpdates(manual = true)
+            }
+        }
         when (intent?.getStringExtra(PrayerWidgetUpdater.EXTRA_START_DESTINATION)) {
             PrayerWidgetUpdater.DEST_TRACKER -> {
                 viewModel.selectNavTab(AppNavTab.DASHBOARD)
@@ -593,6 +687,7 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         checkPermissionsState()
+        viewModel.refreshInstallPermissionState()
         viewModel.refreshNow()
 
         val app = application as? HayyaApplication ?: HayyaApplication.instance

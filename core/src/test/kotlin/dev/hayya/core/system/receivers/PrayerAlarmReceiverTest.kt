@@ -36,6 +36,10 @@ class PrayerAlarmReceiverTest {
     fun setUp() {
         mockkConstructor(NotificationCompat.Builder::class)
         every { anyConstructed<NotificationCompat.Builder>().build() } returns mockk(relaxed = true)
+        mockkConstructor(android.media.AudioAttributes.Builder::class)
+        every { anyConstructed<android.media.AudioAttributes.Builder>().setUsage(any()) } answers { self as android.media.AudioAttributes.Builder }
+        every { anyConstructed<android.media.AudioAttributes.Builder>().setContentType(any()) } answers { self as android.media.AudioAttributes.Builder }
+        every { anyConstructed<android.media.AudioAttributes.Builder>().build() } returns mockk(relaxed = true)
         mockkObject(PrayerWidgetUpdater)
         coEvery { PrayerWidgetUpdater.updateAllWidgets(any()) } just Runs
         mockkStatic(NotificationManagerCompat::class)

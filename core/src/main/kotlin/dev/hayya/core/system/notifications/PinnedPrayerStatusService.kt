@@ -32,6 +32,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.datetime.Clock
+import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.Instant
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
@@ -67,7 +68,9 @@ class PinnedPrayerStatusService : Service() {
             return START_NOT_STICKY
         }
 
-        startForegroundWithServiceType()
+        if (action != ACTION_REFRESH || lastTitle == null) {
+            startForegroundWithServiceType()
+        }
         startTicker()
 
         return START_STICKY
@@ -142,6 +145,7 @@ class PinnedPrayerStatusService : Service() {
                             ishaExpiresAtMidnight = userPrefs.ishaExpiresAtMidnight
                         )
 
+                        val isFriday = localDate.dayOfWeek == DayOfWeek.FRIDAY
                         val nextPrayer = window.nextPrayer
                         val nextPrayerTimeMillis = dailyTimes.upcomingTimeFor(nextPrayer, nowMillis)
                         val nextPrayerFormatted = PrayerViewModel.formatTimeOfDay(nextPrayerTimeMillis, timeZone)
@@ -156,10 +160,10 @@ class PinnedPrayerStatusService : Service() {
                             "in ${remainingMinutes}m"
                         }
 
-                        val title = "Next: ${nextPrayer.name} at $nextPrayerFormatted"
+                        val title = "Next: ${nextPrayer.displayName(isFriday)} at $nextPrayerFormatted"
                         val subtitle = when (window) {
-                            is PrayerWindow.Active -> "${window.currentPrayer.name} window closes $countdownStr"
-                            is PrayerWindow.SunriseInterval -> "Sunrise period • Dhuhr $countdownStr"
+                            is PrayerWindow.Active -> "${window.currentPrayer.displayName(isFriday)} window closes $countdownStr"
+                            is PrayerWindow.SunriseInterval -> "Sunrise period • ${if (isFriday) "Jumu'ah" else "Dhuhr"} $countdownStr"
                         }
 
                         if (title != lastTitle || subtitle != lastSubtitle) {
@@ -208,20 +212,18 @@ class PinnedPrayerStatusService : Service() {
     }
 
     private fun ensureNotificationChannel() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            val channel = NotificationChannel(
-                CHANNEL_ID,
-                "Pinned Prayer Status",
-                NotificationManager.IMPORTANCE_LOW
-            ).apply {
-                description = "Minimalist ongoing status notification anchoring prayer alarms in memory"
-                setShowBadge(false)
-                enableVibration(false)
-                setSound(null, null)
-            }
-            notificationManager.createNotificationChannel(channel)
+        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val channel = NotificationChannel(
+            CHANNEL_ID,
+            "Pinned Prayer Status",
+            NotificationManager.IMPORTANCE_LOW
+        ).apply {
+            description = "Minimalist ongoing status notification anchoring prayer alarms in memory"
+            setShowBadge(false)
+            enableVibration(false)
+            setSound(null, null)
         }
+        notificationManager.createNotificationChannel(channel)
     }
 
     override fun onDestroy() {
@@ -237,6 +239,7 @@ class PinnedPrayerStatusService : Service() {
         const val CHANNEL_ID = "channel_pinned_prayer_status"
 
         const val ACTION_START = "dev.hayya.notification.ACTION_START_PINNED_STATUS"
+        const val ACTION_REFRESH = "dev.hayya.notification.ACTION_REFRESH_PINNED_STATUS"
         const val ACTION_STOP = "dev.hayya.notification.ACTION_STOP_PINNED_STATUS"
 
         @Volatile
@@ -244,7 +247,14 @@ class PinnedPrayerStatusService : Service() {
             private set
 
         fun refreshIfRunning(context: Context) {
-            if (isRunning) {
+            if (!isRunning) return
+            val intent = Intent(context, PinnedPrayerStatusService::class.java).apply {
+                action = ACTION_REFRESH
+            }
+            try {
+                context.startService(intent)
+            } catch (e: Exception) {
+                Log.w(TAG, "Unable to refresh PinnedPrayerStatusService; falling back to start", e)
                 start(context)
             }
         }
@@ -254,11 +264,7 @@ class PinnedPrayerStatusService : Service() {
                 action = ACTION_START
             }
             try {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    context.startForegroundService(intent)
-                } else {
-                    context.startService(intent)
-                }
+                context.startForegroundService(intent)
             } catch (e: Exception) {
                 Log.w(TAG, "Unable to start PinnedPrayerStatusService from current context", e)
             }

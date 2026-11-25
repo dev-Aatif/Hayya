@@ -11,10 +11,14 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.ExperimentalTextApi
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontVariation
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
+import dev.hayya.core.R
 import dev.hayya.core.domain.model.PrayerType
 import dev.hayya.core.domain.model.ThemeModeOption
 
@@ -54,6 +58,33 @@ fun prayerAccentColor(prayerType: PrayerType): Color = when (prayerType) {
 }
 
 val SoraFontFamily: FontFamily = FontFamily.SansSerif
+
+/**
+ * Easy-to-read Noto Naskh Arabic font family supporting Arabic Harakat, Urdu, and Sindhi scripts.
+ */
+@OptIn(ExperimentalTextApi::class)
+val ArabicScriptFontFamily: FontFamily = FontFamily(
+    Font(
+        resId = R.font.noto_naskh_arabic,
+        weight = FontWeight.Normal,
+        variationSettings = FontVariation.Settings(FontVariation.weight(400))
+    ),
+    Font(
+        resId = R.font.noto_naskh_arabic,
+        weight = FontWeight.Medium,
+        variationSettings = FontVariation.Settings(FontVariation.weight(500))
+    ),
+    Font(
+        resId = R.font.noto_naskh_arabic,
+        weight = FontWeight.SemiBold,
+        variationSettings = FontVariation.Settings(FontVariation.weight(600))
+    ),
+    Font(
+        resId = R.font.noto_naskh_arabic,
+        weight = FontWeight.Bold,
+        variationSettings = FontVariation.Settings(FontVariation.weight(700))
+    )
+)
 
 /**
  * Signature Pure OLED Dark ColorScheme for calm, high-contrast viewing.

@@ -23,7 +23,10 @@ import dev.hayya.core.domain.model.ThemeModeOption
 import dev.hayya.core.domain.model.VolumeEscalationOption
 import dev.hayya.core.domain.ramadan.*
 import dev.hayya.core.domain.tasbih.TasbihTargetMode
+import dev.hayya.core.domain.update.AppReleaseInfo
+import dev.hayya.core.domain.update.UpdateCheckResult
 import dev.hayya.core.system.alarm.PrayerAlarmScheduler
+import dev.hayya.core.system.update.AppUpdateEngine
 import dev.hayya.core.ui.components.AppNavTab
 import io.mockk.*
 import kotlinx.coroutines.CoroutineScope
@@ -465,6 +468,11 @@ class PrayerViewModelTest {
             assertThat(viewModel.uiState.value.currentTab).isEqualTo(AppNavTab.DASHBOARD)
             assertThat(viewModel.uiState.value.isSettingsOpen).isFalse()
 
+            // Select Hadith
+            viewModel.selectNavTab(AppNavTab.HADITH)
+            assertThat(viewModel.uiState.value.currentTab).isEqualTo(AppNavTab.HADITH)
+            assertThat(viewModel.uiState.value.isSettingsOpen).isFalse()
+
             // Select Tools
             viewModel.selectNavTab(AppNavTab.TOOLS)
             assertThat(viewModel.uiState.value.currentTab).isEqualTo(AppNavTab.TOOLS)
@@ -848,6 +856,56 @@ class PrayerViewModelTest {
             assertThat(viewModel.uiState.value.isPreferencesLoaded).isTrue()
         } finally {
             viewModel.viewModelScope.cancel()
+        }
+    }
+
+    @Test
+    fun checkForUpdates_notifiesOncePerVersionAndUpdatesUiState() = runTest(testDispatcher) {
+        val mockUpdateEngine = mockk<AppUpdateEngine>(relaxed = true)
+        val release = AppReleaseInfo(
+            tagName = "v1.1.0",
+            versionName = "1.1.0",
+            title = "Hayya v1.1.0",
+            releaseNotes = "Hadith tab & updater",
+            htmlUrl = "https://github.com/dev-Aatif/Hayya/releases/tag/v1.1.0",
+            apkDownloadUrl = "https://github.com/dev-Aatif/Hayya/releases/download/v1.1.0/Hayya-v1.1.0.apk",
+            apkAssetName = "Hayya-v1.1.0.apk",
+            apkSizeBytes = 2048L
+        )
+        every { mockUpdateEngine.currentVersionName() } returns "1.0.0"
+        every { mockUpdateEngine.shouldAutoCheckOnLaunch(any(), any()) } returns true
+        coEvery { mockUpdateEngine.checkForUpdate(any()) } returns UpdateCheckResult.UpdateAvailable(release)
+
+        val updateVm = PrayerViewModel(
+            calculationEngine = calculationEngine,
+            preferencesRepository = repository,
+            alarmScheduler = alarmScheduler,
+            prayerLogRepository = prayerLogRepository,
+            updateEngine = mockUpdateEngine
+        )
+
+        try {
+            testDispatcher.scheduler.runCurrent()
+
+            updateVm.checkForUpdatesOnLaunch()
+            testDispatcher.scheduler.runCurrent()
+
+            val state = updateVm.uiState.value
+            assertThat(state.updateState.availableRelease).isEqualTo(release)
+            assertThat(state.updateState.showUpdateDialog).isTrue()
+            assertThat(repository.userPreferencesFlow.first().lastNotifiedUpdateVersion).isEqualTo("1.1.0")
+            verify(exactly = 1) { mockUpdateEngine.notifyUpdateAvailable(release) }
+
+            updateVm.dismissUpdateDialog()
+            assertThat(updateVm.uiState.value.updateState.showUpdateDialog).isFalse()
+
+            // Subsequent manual check for the same version should not duplicate the system notification
+            updateVm.checkForUpdates(manual = true)
+            testDispatcher.scheduler.runCurrent()
+            verify(exactly = 1) { mockUpdateEngine.notifyUpdateAvailable(release) }
+            assertThat(updateVm.uiState.value.updateState.showUpdateDialog).isTrue()
+        } finally {
+            updateVm.viewModelScope.cancel()
         }
     }
 

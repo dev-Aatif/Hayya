@@ -8,6 +8,7 @@ import android.util.Log
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
+import dev.hayya.core.data.hadith.HadithPreferencesRepository
 import dev.hayya.core.data.preferences.UserPreferencesRepository
 import dev.hayya.core.data.ramadan.FastTrackerRepository
 import dev.hayya.core.domain.calculation.PrayerCalculationEngine
@@ -69,8 +70,15 @@ open class SystemClockChangedReceiver : BroadcastReceiver() {
                 val dataStore = PreferenceDataStoreProvider.getDataStore(context)
                 val repository = UserPreferencesRepository(dataStore)
                 val fastTrackerRepository = FastTrackerRepository(dataStore)
+                val hadithPreferencesRepository = HadithPreferencesRepository(dataStore)
                 val engine = PrayerCalculationEngine()
-                val scheduler = PrayerAlarmScheduler(context, engine, repository, fastTrackerRepository)
+                val scheduler = PrayerAlarmScheduler(
+                    context = context,
+                    calculationEngine = engine,
+                    preferencesRepository = repository,
+                    fastTrackerRepository = fastTrackerRepository,
+                    hadithPreferencesRepository = hadithPreferencesRepository
+                )
 
                 Log.d(TAG, "Cancelling outdated alarms and scheduling fresh rolling batch")
                 scheduler.cancelAllScheduledAlarms()

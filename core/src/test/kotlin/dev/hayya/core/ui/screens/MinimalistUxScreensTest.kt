@@ -23,15 +23,18 @@ class MinimalistUxScreensTest {
     @Test
     fun appNavTab_hasExpectedLabelsAndOrder() {
         val tabs = AppNavTab.entries
-        assertThat(tabs).hasSize(3)
+        assertThat(tabs).hasSize(4)
         assertThat(tabs[0]).isEqualTo(AppNavTab.DASHBOARD)
         assertThat(tabs[0].label).isEqualTo("Prayers")
 
-        assertThat(tabs[1]).isEqualTo(AppNavTab.TOOLS)
-        assertThat(tabs[1].label).isEqualTo("Companion")
+        assertThat(tabs[1]).isEqualTo(AppNavTab.HADITH)
+        assertThat(tabs[1].label).isEqualTo("Hadith")
 
-        assertThat(tabs[2]).isEqualTo(AppNavTab.SETTINGS)
-        assertThat(tabs[2].label).isEqualTo("Settings")
+        assertThat(tabs[2]).isEqualTo(AppNavTab.TOOLS)
+        assertThat(tabs[2].label).isEqualTo("Companion")
+
+        assertThat(tabs[3]).isEqualTo(AppNavTab.SETTINGS)
+        assertThat(tabs[3].label).isEqualTo("Settings")
     }
 
     @Test

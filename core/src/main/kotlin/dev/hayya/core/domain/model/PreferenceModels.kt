@@ -328,7 +328,9 @@ data class UserPreferences(
     val hasCompletedOnboarding: Boolean = false,
     val tasbihCount: Int = 0,
     val tasbihMode: TasbihTargetMode = TasbihTargetMode.FATIMA_100,
-    val salawatCount: Int = 0
+    val salawatCount: Int = 0,
+    val lastUpdateCheckEpochMillis: Long = 0L,
+    val lastNotifiedUpdateVersion: String? = null
 ) {
     fun getOffset(prayer: PrayerType): Int = manualMinuteOffsets[prayer] ?: 0
 

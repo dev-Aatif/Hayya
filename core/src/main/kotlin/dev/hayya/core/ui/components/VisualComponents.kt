@@ -482,10 +482,10 @@ private data class Quad<A, B, C, D>(val first: A, val second: B, val third: C, v
 @Composable
 fun SectionPageHeader(
     title: String,
-    subtitle: String? = null,
     onBackClick: () -> Unit,
-    badgeText: String? = null,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    subtitle: String? = null,
+    badgeText: String? = null
 ) {
     Row(
         modifier = modifier

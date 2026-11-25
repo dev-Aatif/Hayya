@@ -7,6 +7,7 @@ import android.content.Intent
 import android.os.Build
 import android.util.Log
 import com.batoulapps.adhan.Coordinates
+import dev.hayya.core.data.hadith.HadithPreferencesRepository
 import dev.hayya.core.data.preferences.UserPreferencesRepository
 import dev.hayya.core.data.ramadan.FastTrackerRepository
 import dev.hayya.core.domain.calculation.PrayerCalculationEngine
@@ -41,7 +42,8 @@ class PrayerAlarmScheduler(
     private val calculationEngine: PrayerCalculationEngine,
     private val preferencesRepository: UserPreferencesRepository? = null,
     private val fastTrackerRepository: FastTrackerRepository? = null,
-    private val alarmManager: AlarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+    private val alarmManager: AlarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager,
+    private val hadithPreferencesRepository: HadithPreferencesRepository? = null
 ) {
 
     /**
@@ -74,6 +76,7 @@ class PrayerAlarmScheduler(
         val userPrefs = preferences ?: preferencesRepository?.userPreferencesFlow?.first()
             ?: UserPreferences()
         val resolvedRamadanSettings = ramadanSettings ?: fastTrackerRepository?.observeRamadanSettings()?.first()
+        val resolvedHadithPrefs = hadithPreferencesRepository?.preferencesFlow?.first()
 
         val timeZone = TimeZone.currentSystemDefault()
         val effectiveStartDate = startDate ?: Clock.System.now().toLocalDateTime(timeZone).date
@@ -134,7 +137,9 @@ class PrayerAlarmScheduler(
             )
         }
 
-        val needsTodayDailyTimes = userPrefs.tahajjudAlarmEnabled || (resolvedRamadanSettings?.suhoorAlarmEnabled == true)
+        val needsTodayDailyTimes = userPrefs.tahajjudAlarmEnabled ||
+            (resolvedRamadanSettings?.suhoorAlarmEnabled == true) ||
+            (resolvedHadithPrefs?.morningNotificationEnabled == true)
         val todayDailyTimes = if (needsTodayDailyTimes) {
             calculationEngine.computeDailyTimes(
                 date = effectiveStartDate,
@@ -207,6 +212,22 @@ class PrayerAlarmScheduler(
             // Eid auto-alerts are deprecated for V1 (moon-sighting dates vary regionally)
             @Suppress("DEPRECATION")
             cancelEidCelebration()
+        }
+
+        // Schedule or cancel daily on-sunrise Hadith notification
+        if (resolvedHadithPrefs != null) {
+            if (resolvedHadithPrefs.morningNotificationEnabled && todayDailyTimes != null) {
+                val sunriseTrigger = if (todayDailyTimes.sunrise > currentEpochMillis) {
+                    todayDailyTimes.sunrise
+                } else {
+                    getTomorrowDailyTimes().sunrise
+                }
+                if (sunriseTrigger > currentEpochMillis) {
+                    scheduleDailyHadithAlarm(sunriseTrigger)
+                }
+            } else {
+                cancelDailyHadithAlarm()
+            }
         }
 
         Log.i(
@@ -523,6 +544,51 @@ class PrayerAlarmScheduler(
     }
 
     /**
+     * Schedules the daily Hadith notification at [triggerEpochMillis] (on Sunrise).
+     */
+    fun scheduleDailyHadithAlarm(triggerEpochMillis: Long) {
+        val intent = Intent(context, PrayerAlarmReceiver::class.java).apply {
+            action = ACTION_TRIGGER_DAILY_HADITH
+        }
+        val pendingIntent = PendingIntent.getBroadcast(
+            context,
+            NOTIFICATION_ID_DAILY_HADITH,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        val alarmClockInfo = AlarmManager.AlarmClockInfo(
+            triggerEpochMillis,
+            createMainActivityShowIntent(NOTIFICATION_ID_DAILY_HADITH)
+        )
+        try {
+            alarmManager.setAlarmClock(alarmClockInfo, pendingIntent)
+            Log.i(TAG, "Scheduled daily sunrise Hadith notification for $triggerEpochMillis")
+        } catch (se: SecurityException) {
+            Log.e(TAG, "SecurityException scheduling daily Hadith notification", se)
+        }
+    }
+
+    /**
+     * Cancels any pending daily sunrise Hadith notification.
+     */
+    fun cancelDailyHadithAlarm() {
+        val intent = Intent(context, PrayerAlarmReceiver::class.java).apply {
+            action = ACTION_TRIGGER_DAILY_HADITH
+        }
+        val pendingIntent = PendingIntent.getBroadcast(
+            context,
+            NOTIFICATION_ID_DAILY_HADITH,
+            intent,
+            PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE
+        )
+        if (pendingIntent != null) {
+            alarmManager.cancel(pendingIntent)
+            pendingIntent.cancel()
+            Log.i(TAG, "Cancelled pending daily sunrise Hadith notification")
+        }
+    }
+
+    /**
      * Schedules a celebratory Eid morning notification.
      */
     @Deprecated("Eid auto-notifications are deferred to a future dedicated Eid screen.")
@@ -595,8 +661,12 @@ class PrayerAlarmScheduler(
         const val NOTIFICATION_ID_SUHOOR = 777777
         const val NOTIFICATION_ID_EID = 777778
         const val NOTIFICATION_ID_TAHAJJUD = 777779
+        const val NOTIFICATION_ID_DAILY_HADITH = 777780
 
         const val ACTION_TRIGGER_TAHAJJUD_ALARM = "dev.hayya.alarm.ACTION_TRIGGER_TAHAJJUD_ALARM"
+        const val ACTION_TRIGGER_DAILY_HADITH = "dev.hayya.alarm.ACTION_TRIGGER_DAILY_HADITH"
+
+        const val EXTRA_OPEN_HADITH_ID = "dev.hayya.extra.OPEN_HADITH_ID"
 
         const val EXTRA_NOTIFICATION_ID = "extra_notification_id"
         const val EXTRA_PRAYER_TYPE = "extra_prayer_type"

@@ -81,17 +81,17 @@ fun ToolsScreen(
     state: PrayerDashboardUiState,
     onOpenCompass: () -> Unit,
     onOpenTasbih: () -> Unit,
+    onTogglePostAdhanDua: (Boolean) -> Unit,
+    onLaunchBatterySettings: () -> Unit,
+    onTriggerTestAlarm: (Int) -> Unit,
+    modifier: Modifier = Modifier,
     onOpenRamadan: () -> Unit = {},
     onIncrementTasbih: () -> Unit = {},
     onTogglePrayerCompletion: (PrayerType) -> Unit = {},
-    onTogglePostAdhanDua: (Boolean) -> Unit,
     onToggleTahajjudAlarm: (Boolean) -> Unit = {},
-    onLaunchBatterySettings: () -> Unit,
-    onTriggerTestAlarm: (Int) -> Unit,
     onOpenTracker: () -> Unit = {},
     onOpenTahajjud: () -> Unit = {},
-    onOpenFridayGuide: () -> Unit = {},
-    modifier: Modifier = Modifier
+    onOpenFridayGuide: () -> Unit = {}
 ) {
     var showPostAdhanDuaSheet by remember { mutableStateOf(false) }
     var showAlarmSimulatorSheet by remember { mutableStateOf(false) }
@@ -243,7 +243,7 @@ fun ToolsScreen(
                 )
             }
 
-            Spacer(modifier = Modifier.height(110.dp))
+            Spacer(modifier = Modifier.height(24.dp))
         }
     }
 
