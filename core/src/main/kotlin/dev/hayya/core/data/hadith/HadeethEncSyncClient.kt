@@ -8,6 +8,7 @@ import dev.hayya.core.domain.hadith.HadithLanguage
 import dev.hayya.core.domain.hadith.HadithPillar
 import dev.hayya.core.domain.hadith.HadithTextVariant
 import dev.hayya.core.domain.hadith.PriorityTopicFilter
+import dev.hayya.core.system.update.AppUpdateEngine
 import dev.hayya.core.system.update.HttpUrlConnectionUpdateTransport
 import dev.hayya.core.system.update.UpdateHttpTransport
 import kotlinx.coroutines.async
@@ -23,7 +24,9 @@ import java.util.concurrent.atomic.AtomicInteger
  * in Arabic, English, Urdu, and Sindhi for offline SQLite caching.
  */
 class HadeethEncSyncClient(
-    private val httpTransport: UpdateHttpTransport = HttpUrlConnectionUpdateTransport(),
+    private val httpTransport: UpdateHttpTransport = HttpUrlConnectionUpdateTransport(
+        urlValidator = ::isAllowedApiUrl
+    ),
     private val baseUrl: String = DEFAULT_BASE_URL
 ) {
 
@@ -168,5 +171,11 @@ class HadeethEncSyncClient(
         const val DEFAULT_BASE_URL = "https://hadeethenc.com/api/v1"
         const val DEFAULT_BATCH_SIZE = 20
         private const val MAX_CONCURRENT_REQUESTS = 4
+
+        fun isAllowedApiUrl(rawUrl: String?): Boolean {
+            return AppUpdateEngine.isAllowedHttpsUrl(rawUrl) { host ->
+                host == "hadeethenc.com" || host.endsWith(".hadeethenc.com")
+            }
+        }
     }
 }

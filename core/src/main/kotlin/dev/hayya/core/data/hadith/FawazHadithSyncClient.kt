@@ -9,6 +9,7 @@ import dev.hayya.core.domain.hadith.HadithEntry
 import dev.hayya.core.domain.hadith.HadithLanguage
 import dev.hayya.core.domain.hadith.HadithTextVariant
 import dev.hayya.core.domain.hadith.PriorityTopicFilter
+import dev.hayya.core.system.update.AppUpdateEngine
 import dev.hayya.core.system.update.HttpUrlConnectionUpdateTransport
 import dev.hayya.core.system.update.UpdateHttpTransport
 
@@ -26,7 +27,9 @@ data class FawazBookDownloadResult(
  * in Arabic, English, and Urdu from the free rate-limit-free jsDelivr CDN.
  */
 class FawazHadithSyncClient(
-    private val httpTransport: UpdateHttpTransport = HttpUrlConnectionUpdateTransport(),
+    private val httpTransport: UpdateHttpTransport = HttpUrlConnectionUpdateTransport(
+        urlValidator = ::isAllowedCdnUrl
+    ),
     private val editionsIndexUrl: String = DEFAULT_EDITIONS_URL
 ) {
 
@@ -226,5 +229,19 @@ class FawazHadithSyncClient(
     companion object {
         const val DEFAULT_EDITIONS_URL =
             "https://cdn.jsdelivr.net/gh/fawazahmed0/hadith-api@1/editions.json"
+
+        private val ALLOWED_GITHUB_HOSTS = setOf(
+            "raw.githubusercontent.com",
+            "github.com",
+            "objects.githubusercontent.com"
+        )
+
+        fun isAllowedCdnUrl(rawUrl: String?): Boolean {
+            return AppUpdateEngine.isAllowedHttpsUrl(rawUrl) { host ->
+                host == "cdn.jsdelivr.net" ||
+                    host.endsWith(".jsdelivr.net") ||
+                    host in ALLOWED_GITHUB_HOSTS
+            }
+        }
     }
 }

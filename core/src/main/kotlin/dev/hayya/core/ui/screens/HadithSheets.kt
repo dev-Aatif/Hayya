@@ -78,6 +78,7 @@ import androidx.compose.ui.unit.sp
 import dev.hayya.core.domain.hadith.HadithBookInfo
 import dev.hayya.core.domain.hadith.HadithCategorySyncInfo
 import dev.hayya.core.domain.hadith.HadithEntry
+import dev.hayya.core.domain.hadith.HadithIsnadFormatter
 import dev.hayya.core.domain.hadith.HadithLanguage
 import dev.hayya.core.domain.hadith.HadithUserPreferences
 import dev.hayya.core.domain.hadith.ShareCardAspect
@@ -105,6 +106,15 @@ fun HadithReaderModalSheet(
     val resolved = remember(entry, preferences.preferredLanguage) {
         entry.resolveTranslation(preferences.preferredLanguage)
     }
+    var showFullChain by remember(entry.id) { mutableStateOf(false) }
+    val condensedArabic = remember(entry.id, entry.arabic.matn) {
+        HadithIsnadFormatter.formatArabic(entry.arabic.matn)
+    }
+    val condensedTranslation = remember(entry.id, resolved.language, resolved.variant.matn) {
+        HadithIsnadFormatter.formatTranslation(resolved.variant.matn, resolved.language)
+    }
+    val hasCondensedChain = condensedArabic != entry.arabic.matn ||
+        condensedTranslation != resolved.variant.matn
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -218,6 +228,32 @@ fun HadithReaderModalSheet(
                         modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
                     )
                 }
+                if (hasCondensedChain) {
+                    Surface(
+                        modifier = Modifier
+                            .clip(CircleShape)
+                            .clickable { showFullChain = !showFullChain },
+                        shape = CircleShape,
+                        color = if (showFullChain) {
+                            MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
+                        } else {
+                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
+                        }
+                    ) {
+                        Text(
+                            text = if (showFullChain) "Chain: Full" else "Chain: Short",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontWeight = if (showFullChain) FontWeight.Bold else FontWeight.Medium,
+                                color = if (showFullChain) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                }
+                            ),
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                        )
+                    }
+                }
             }
 
             Spacer(modifier = Modifier.height(14.dp))
@@ -254,7 +290,7 @@ fun HadithReaderModalSheet(
                     ) {
                         CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
                             Text(
-                                text = entry.arabic.matn,
+                                text = if (showFullChain) entry.arabic.matn else condensedArabic,
                                 style = MaterialTheme.typography.titleMedium.copy(
                                     fontFamily = ArabicScriptFontFamily,
                                     fontSize = (20f * preferences.fontScale).sp,
@@ -273,7 +309,7 @@ fun HadithReaderModalSheet(
                 val transDir = if (resolved.language.isRtl) LayoutDirection.Rtl else LayoutDirection.Ltr
                 CompositionLocalProvider(LocalLayoutDirection provides transDir) {
                     Text(
-                        text = resolved.variant.matn,
+                        text = if (showFullChain) resolved.variant.matn else condensedTranslation,
                         style = MaterialTheme.typography.bodyLarge.copy(
                             fontFamily = if (resolved.language.isRtl) ArabicScriptFontFamily else MaterialTheme.typography.bodyLarge.fontFamily,
                             fontSize = (16f * preferences.fontScale).sp,
@@ -1108,10 +1144,10 @@ private fun copyHadithToClipboard(
     val resolved = entry.resolveTranslation(preferences.preferredLanguage)
     val text = buildString {
         if (preferences.showArabic && entry.arabic.matn.isNotBlank()) {
-            appendLine(entry.arabic.matn)
+            appendLine(HadithIsnadFormatter.formatArabic(entry.arabic.matn))
             appendLine()
         }
-        appendLine(resolved.variant.matn)
+        appendLine(HadithIsnadFormatter.formatTranslation(resolved.variant.matn, resolved.language))
         appendLine()
         append("— ${entry.attribution}")
         if (entry.grade.isNotBlank()) {

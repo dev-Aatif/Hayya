@@ -2,11 +2,11 @@
 
 This document tracks known issues and the upcoming feature roadmap for **Hayya**.
 
-> **Current Release (`1.1.1`):** Offline-first prayer times, Doze-resilient exact alarms, Mosque Auto-Silent, Companion tools, 5 Glance AppWidgets, Multilingual Hadith Hub, and fail-closed GitHub Releases In-App Updater — calibrated for **Pakistan (Larkana Division)** with regional Hijri moonsighting offset (`-2d` to `+2d`).
+> **Current Release (`1.1.2`):** Offline-first prayer times, Doze-resilient exact alarms, Mosque Auto-Silent, Companion tools, 5 Glance AppWidgets, Multilingual Hadith Hub (with concise 2–3 narrator Isnad display and on-demand full-chain toggle), and fail-closed GitHub Releases In-App Updater — calibrated for **Pakistan (Larkana Division)** with regional Hijri moonsighting offset (`-2d` to `+2d`).
 
 ---
 
-## Resolved Issues (`v1.1.1`)
+## Resolved Issues (`v1.1.1` – `v1.1.2`)
 
 1. **Alarm Notification & Foreground Service Isolation** *(Fixed)*
    - `PrayerAudioService` now uses dedicated notification IDs/action `PendingIntent` request codes (`FOREGROUND_NOTIFICATION_ID`), preserves `CHANNEL_MAIN_CALL` / Suhoor wake extras, honors `AudioFocus`, suppresses loud Adhan during active voice/VoIP calls, and scopes `ACTION_PLAYBACK_FINISHED` by notification ID without forcing unnecessary keyguard unlock prompts.
@@ -26,7 +26,7 @@ This document tracks known issues and the upcoming feature roadmap for **Hayya**
 ## Known Issues
 
 ### Major Issues
-- *None identified for `1.1.1`.*
+- *None identified for `1.1.2`.*
 
 ### Minor Issues
 - **Informational Android Lint Warnings (0 Errors)**:

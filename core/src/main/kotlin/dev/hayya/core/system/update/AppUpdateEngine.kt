@@ -46,7 +46,8 @@ interface UpdateHttpTransport {
  * and redirect handling for GitHub Releases and CDN asset downloads.
  */
 class HttpUrlConnectionUpdateTransport(
-    private val userAgent: String = "Hayya-Android"
+    private val userAgent: String = "Hayya-Android",
+    private val urlValidator: (String?) -> Boolean = AppUpdateEngine::isAllowedUpdateUrl
 ) : UpdateHttpTransport {
 
     override suspend fun getText(url: String): Result<String> = withContext(Dispatchers.IO) {
@@ -58,7 +59,7 @@ class HttpUrlConnectionUpdateTransport(
             try {
                 val code = connection.responseCode
                 if (code !in 200..299) {
-                    throw IllegalStateException("HTTP $code while checking updates")
+                    throw IllegalStateException("HTTP $code while fetching resource")
                 }
                 val contentLength = connection.contentLengthLong
                 if (contentLength > MAX_TEXT_RESPONSE_BYTES) {
@@ -164,8 +165,8 @@ class HttpUrlConnectionUpdateTransport(
         var currentUrl = initialUrl
         var redirects = 0
         while (true) {
-            require(AppUpdateEngine.isAllowedUpdateUrl(currentUrl)) {
-                "Refusing non-HTTPS or untrusted update host"
+            require(urlValidator(currentUrl)) {
+                "Refusing non-HTTPS or untrusted host"
             }
             val conn = (URL(currentUrl).openConnection() as HttpURLConnection).apply {
                 instanceFollowRedirects = false
@@ -368,13 +369,17 @@ class AppUpdateEngine(
             "github-releases.githubusercontent.com"
         )
 
-        fun isAllowedUpdateUrl(rawUrl: String?): Boolean {
+        fun isAllowedHttpsUrl(rawUrl: String?, hostPredicate: (String) -> Boolean): Boolean {
             if (rawUrl.isNullOrBlank()) return false
             val uri = runCatching { URI(rawUrl.trim()) }.getOrNull() ?: return false
             if (!uri.scheme.equals("https", ignoreCase = true)) return false
             if (!uri.userInfo.isNullOrEmpty()) return false
             val host = uri.host?.lowercase(Locale.US) ?: return false
-            return host in ALLOWED_UPDATE_HOSTS
+            return hostPredicate(host)
+        }
+
+        fun isAllowedUpdateUrl(rawUrl: String?): Boolean {
+            return isAllowedHttpsUrl(rawUrl) { host -> host in ALLOWED_UPDATE_HOSTS }
         }
 
         fun resolveInstalledVersionName(context: Context): String {

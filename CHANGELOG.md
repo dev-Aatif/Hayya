@@ -2,6 +2,16 @@
 
 All notable changes to **Hayya** will be documented in this file.
 
+## [1.1.2] — 2026-11-28
+
+Bugfix and Hadith readability release on top of `1.1.1`:
+
+### Fixed
+- **Hadith Pack & Category Sync Host Allowlist (`FawazHadithSyncClient`, `HadeethEncSyncClient`, `AppUpdateEngine`)**: Parameterized `HttpUrlConnectionUpdateTransport` with an explicit `urlValidator` so `FawazHadithSyncClient` allows `cdn.jsdelivr.net` / `*.jsdelivr.net` / GitHub CDN hosts and `HadeethEncSyncClient` allows `hadeethenc.com` / `*.hadeethenc.com` over strict HTTPS, fixing `"Refusing non-HTTPS or untrusted update host"` during Hadith book and topic downloads while keeping `AppUpdateEngine` restricted to GitHub release hosts.
+
+### Improved
+- **Concise Narration Chain Display (`HadithIsnadFormatter`, `HadithScreen`, `HadithSheets`, `HadithStatusCardRenderer`)**: Automatically condenses lengthy classical *Isnad* chains in Urdu, Sindhi, and Arabic collections down to 2–3 recognizable narrators (Companion plus 1–2 key predecessors) for effortless reading and sharing, while keeping full-text search intact and offering a `Chain: Short / Full` toggle inside the Hadith reader sheet.
+
 ## [1.1.1] — 2026-11-27
 
 Security, reliability, performance, and UX hardening release on top of `1.1.0`:

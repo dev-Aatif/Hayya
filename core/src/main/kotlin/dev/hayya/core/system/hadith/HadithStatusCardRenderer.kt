@@ -20,6 +20,7 @@ import androidx.core.content.FileProvider
 import androidx.core.content.res.ResourcesCompat
 import dev.hayya.core.R
 import dev.hayya.core.domain.hadith.HadithEntry
+import dev.hayya.core.domain.hadith.HadithIsnadFormatter
 import dev.hayya.core.domain.hadith.HadithLanguage
 import dev.hayya.core.domain.hadith.ShareCardAspect
 import dev.hayya.core.domain.hadith.ShareCardTheme
@@ -150,8 +151,12 @@ object HadithStatusCardRenderer {
             .coerceAtLeast(220)
 
         val resolved = entry.resolveTranslation(preferredLanguage)
-        val translationText = resolved.variant.matn
-        val arabicText = if (showArabic && entry.arabic.matn.isNotBlank()) entry.arabic.matn else ""
+        val translationText = HadithIsnadFormatter.formatTranslation(resolved.variant.matn, resolved.language)
+        val arabicText = if (showArabic && entry.arabic.matn.isNotBlank()) {
+            HadithIsnadFormatter.formatArabic(entry.arabic.matn)
+        } else {
+            ""
+        }
         val translationTypeface = if (resolved.language.isRtl) arabicTypeface else Typeface.SANS_SERIF
 
         var scale = 1.0f

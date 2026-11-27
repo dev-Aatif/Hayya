@@ -4,6 +4,7 @@ import com.google.common.truth.Truth.assertThat
 import dev.hayya.core.domain.hadith.HadithCategorySyncInfo
 import dev.hayya.core.domain.hadith.HadithLanguage
 import dev.hayya.core.domain.hadith.HadithPillar
+import dev.hayya.core.system.update.HttpUrlConnectionUpdateTransport
 import dev.hayya.core.system.update.UpdateHttpTransport
 import kotlinx.coroutines.test.runTest
 import org.junit.Test
@@ -76,6 +77,22 @@ class HadeethEncSyncClientTest {
         assertThat(entry.translations[HadithLanguage.ENGLISH]?.matn).isEqualTo("Actions are by intentions")
         assertThat(entry.translations[HadithLanguage.URDU]?.matn).isEqualTo("اعمال کا دارومدار نیت پر ہے")
         assertThat(entry.translations[HadithLanguage.SINDHI]?.matn).isEqualTo("عملن جو دارومدار نيت تي آهي")
+    }
+
+    @Test
+    fun isAllowedApiUrl_acceptsHadeethEncAndRejectsUntrusted() = runTest {
+        assertThat(HadeethEncSyncClient.isAllowedApiUrl("${HadeethEncSyncClient.DEFAULT_BASE_URL}/categories/list/?language=en")).isTrue()
+        assertThat(HadeethEncSyncClient.isAllowedApiUrl("https://www.hadeethenc.com/api/v1/categories/list/")).isTrue()
+        assertThat(HadeethEncSyncClient.isAllowedApiUrl("http://hadeethenc.com/api/v1/categories/list/")).isFalse()
+        assertThat(HadeethEncSyncClient.isAllowedApiUrl("https://hadeethenc.com.evil.com/api/v1")).isFalse()
+        assertThat(HadeethEncSyncClient.isAllowedApiUrl("https://hadeethenc.com@evil.com/api/v1")).isFalse()
+
+        val clientWithUntrustedBase = HadeethEncSyncClient(
+            httpTransport = HttpUrlConnectionUpdateTransport(urlValidator = HadeethEncSyncClient::isAllowedApiUrl),
+            baseUrl = "https://untrusted.example.com/api/v1"
+        )
+        val result = clientWithUntrustedBase.fetchPrioritizedCategories()
+        assertThat(result.isFailure).isTrue()
     }
 
     private class FakeHttpTransport(

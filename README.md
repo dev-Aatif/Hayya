@@ -53,15 +53,15 @@ Built with pure Kotlin, Jetpack Compose (Material 3), and Jetpack Glance AppWidg
 
 ## Download & Installation
 
-1. Download **`Hayya-v1.1.1.apk`** (and optionally **`Hayya-v1.1.1.apk.sha256`**) from the [GitHub Releases](../../releases) page.
+1. Download **`Hayya-v1.1.2.apk`** (and optionally **`Hayya-v1.1.2.apk.sha256`**) from the [GitHub Releases](../../releases) page.
 2. *(Optional)* Verify the APK integrity before installing:
    ```bash
-   sha256sum -c Hayya-v1.1.1.apk.sha256
+   sha256sum -c Hayya-v1.1.2.apk.sha256
    ```
 3. Install on **Android 8.0+ (API 26+)**:
    - Open the APK on your device and allow installation from your browser/file manager, **or** install via ADB:
      ```bash
-     adb install -r Hayya-v1.1.1.apk
+     adb install -r Hayya-v1.1.2.apk
      ```
 4. Complete the 3-step Welcome Setup to select your town in **Larkana Division**, choose your **Asr** juristic school (**Hanafi** or **Standard**), and grant **Notifications**, **Unrestricted Battery**, and **Exact Alarm** permissions.
 

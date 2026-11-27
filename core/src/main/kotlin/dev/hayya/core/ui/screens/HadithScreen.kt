@@ -58,6 +58,7 @@ import dev.hayya.core.domain.hadith.HadithBookInfo
 import dev.hayya.core.domain.hadith.HadithCategorySyncInfo
 import dev.hayya.core.domain.hadith.HadithEntry
 import dev.hayya.core.domain.hadith.HadithFeedFilter
+import dev.hayya.core.domain.hadith.HadithIsnadFormatter
 import dev.hayya.core.domain.hadith.HadithLanguage
 import dev.hayya.core.domain.model.ThemeModeOption
 import dev.hayya.core.ui.theme.ArabicScriptFontFamily
@@ -660,10 +661,13 @@ private fun DailyHadithHeroCard(
             }
 
             if (showArabic && entry.arabic.matn.isNotBlank()) {
+                val formattedArabic = remember(entry.id, entry.arabic.matn) {
+                    HadithIsnadFormatter.formatArabic(entry.arabic.matn)
+                }
                 Spacer(modifier = Modifier.height(10.dp))
                 CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
                     Text(
-                        text = entry.arabic.matn,
+                        text = formattedArabic,
                         maxLines = 3,
                         overflow = TextOverflow.Ellipsis,
                         style = MaterialTheme.typography.bodyLarge.copy(
@@ -679,10 +683,13 @@ private fun DailyHadithHeroCard(
 
             Spacer(modifier = Modifier.height(10.dp))
 
+            val formattedTranslation = remember(entry.id, resolved.language, resolved.variant.matn) {
+                HadithIsnadFormatter.formatTranslation(resolved.variant.matn, resolved.language)
+            }
             val transDir = if (resolved.language.isRtl) LayoutDirection.Rtl else LayoutDirection.Ltr
             CompositionLocalProvider(LocalLayoutDirection provides transDir) {
                 Text(
-                    text = resolved.variant.matn,
+                    text = formattedTranslation,
                     maxLines = 4,
                     overflow = TextOverflow.Ellipsis,
                     style = MaterialTheme.typography.bodyMedium.copy(
@@ -836,10 +843,13 @@ private fun HadithFeedCard(
             }
 
             if (showArabic && entry.arabic.matn.isNotBlank()) {
+                val formattedArabic = remember(entry.id, entry.arabic.matn) {
+                    HadithIsnadFormatter.formatArabic(entry.arabic.matn)
+                }
                 Spacer(modifier = Modifier.height(8.dp))
                 CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
                     Text(
-                        text = entry.arabic.matn,
+                        text = formattedArabic,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                         style = MaterialTheme.typography.bodyMedium.copy(
@@ -855,10 +865,13 @@ private fun HadithFeedCard(
 
             Spacer(modifier = Modifier.height(8.dp))
 
+            val formattedTranslation = remember(entry.id, resolved.language, resolved.variant.matn) {
+                HadithIsnadFormatter.formatTranslation(resolved.variant.matn, resolved.language)
+            }
             val transDir = if (resolved.language.isRtl) LayoutDirection.Rtl else LayoutDirection.Ltr
             CompositionLocalProvider(LocalLayoutDirection provides transDir) {
                 Text(
-                    text = resolved.variant.matn,
+                    text = formattedTranslation,
                     maxLines = 3,
                     overflow = TextOverflow.Ellipsis,
                     style = MaterialTheme.typography.bodyMedium.copy(

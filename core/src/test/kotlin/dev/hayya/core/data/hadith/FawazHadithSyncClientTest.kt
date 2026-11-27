@@ -5,6 +5,7 @@ import dev.hayya.core.domain.hadith.CanonicalHadithBooks
 import dev.hayya.core.domain.hadith.FawazHadithJsonParser
 import dev.hayya.core.domain.hadith.HadithLanguage
 import dev.hayya.core.domain.hadith.HadithPillar
+import dev.hayya.core.system.update.HttpUrlConnectionUpdateTransport
 import dev.hayya.core.system.update.UpdateHttpTransport
 import kotlinx.coroutines.test.runTest
 import org.junit.Test
@@ -64,6 +65,23 @@ class FawazHadithSyncClientTest {
         val tradeHadith = downloaded.entries[1]
         assertThat(tradeHadith.id).isEqualTo("fw_bukhari_2050")
         assertThat(tradeHadith.isPriority).isFalse()
+    }
+
+    @Test
+    fun isAllowedCdnUrl_acceptsJsDelivrAndGithubAndRejectsUntrusted() = runTest {
+        assertThat(FawazHadithSyncClient.isAllowedCdnUrl(FawazHadithSyncClient.DEFAULT_EDITIONS_URL)).isTrue()
+        assertThat(FawazHadithSyncClient.isAllowedCdnUrl("https://fastly.jsdelivr.net/gh/fawazahmed0/hadith-api@1/editions/ara-bukhari.min.json")).isTrue()
+        assertThat(FawazHadithSyncClient.isAllowedCdnUrl("https://raw.githubusercontent.com/fawazahmed0/hadith-api/1/editions.json")).isTrue()
+        assertThat(FawazHadithSyncClient.isAllowedCdnUrl("http://cdn.jsdelivr.net/gh/fawazahmed0/hadith-api@1/editions.json")).isFalse()
+        assertThat(FawazHadithSyncClient.isAllowedCdnUrl("https://cdn.jsdelivr.net.evil.com/editions.json")).isFalse()
+        assertThat(FawazHadithSyncClient.isAllowedCdnUrl("https://cdn.jsdelivr.net@evil.com/editions.json")).isFalse()
+
+        val clientWithUntrustedEndpoint = FawazHadithSyncClient(
+            httpTransport = HttpUrlConnectionUpdateTransport(urlValidator = FawazHadithSyncClient::isAllowedCdnUrl),
+            editionsIndexUrl = "https://untrusted.example.com/editions.json"
+        )
+        val result = clientWithUntrustedEndpoint.downloadBook(CanonicalHadithBooks.catalog.first())
+        assertThat(result.isFailure).isTrue()
     }
 
     private class FakeHttpTransport(
