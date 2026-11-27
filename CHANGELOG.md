@@ -2,9 +2,12 @@
 
 All notable changes to **Hayya** will be documented in this file.
 
-## [Unreleased]
+## [1.1.1] — 2026-11-27
 
-Security, reliability, performance, and UX hardening pass on top of `1.1.0`:
+Security, reliability, performance, and UX hardening release on top of `1.1.0`:
+
+### Developer Experience & Build Isolation
+- **Side-by-Side Debug Installs (`core/build.gradle.kts`, `debug/res/values/strings.xml`)**: Added `applicationIdSuffix = ".debug"`, `versionNameSuffix = "-debug"`, and `"Hayya Debug"` label override so local debug APKs (`dev.hayya.debug`) install without conflicting with release-signed `dev.hayya` builds.
 
 ### Security & Privacy
 - **Fail-Closed Updater (`AppUpdateEngine`, `MainActivity`)**: Required valid HTTPS SHA-256 verification assets (`downloadAndVerifyApk` now fails closed when missing), enforced exact HTTPS GitHub host allowlisting across redirects and external browser intents, and capped `getText` response reads at 32 MiB.

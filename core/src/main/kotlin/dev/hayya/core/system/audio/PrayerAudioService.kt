@@ -229,6 +229,9 @@ class PrayerAudioService : Service() {
             val fullVolumeDurationMs = ((timeoutSeconds.coerceAtLeast(3) - 2) * 1000L)
             delay(fullVolumeDurationMs)
 
+            escalationJob?.cancel()
+            escalationJob = null
+
             // Smooth 20-step volume fade-out over 2000 milliseconds
             val fadeSteps = 20
             val stepDelayMs = 100L

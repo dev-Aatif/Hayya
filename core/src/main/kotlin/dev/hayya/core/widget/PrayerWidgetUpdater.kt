@@ -20,9 +20,11 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.datetime.Clock
+import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.Instant
 import kotlinx.datetime.TimeZone
+import kotlinx.datetime.minus
 import kotlinx.datetime.toLocalDateTime
 import java.util.Locale
 
@@ -172,7 +174,18 @@ object PrayerWidgetUpdater {
                     date = localDate,
                     hijriOffsetDays = userPrefs.hijriDayOffsetDays
                 )
-                val tahajjud = NightFastingCalculator.resolveTahajjudSchedule(dailyTimes, nowMillis, timeZone)
+                val yesterdayTimes = engine.computeDailyTimes(
+                    date = localDate.minus(1, DateTimeUnit.DAY),
+                    coordinates = coordinates,
+                    parameters = params,
+                    manualOffsets = userPrefs.manualMinuteOffsets
+                )
+                val tahajjud = NightFastingCalculator.resolveTahajjudSchedule(
+                    dailyTimes = dailyTimes,
+                    nowEpochMillis = nowMillis,
+                    timeZone = timeZone,
+                    yesterdayMaghribMillis = yesterdayTimes.maghrib
+                )
 
                 val shortCity = userPrefs.location.resolvedLocationName
                     .ifEmpty { "Larkana" }

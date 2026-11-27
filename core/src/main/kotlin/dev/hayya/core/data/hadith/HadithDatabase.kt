@@ -15,6 +15,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.withContext
 
 /**
@@ -751,7 +752,7 @@ class HadithDatabase(
     }
 
     private fun notifyChanged() {
-        _changes.value += 1L
+        _changes.update { it + 1L }
     }
 
     companion object {
