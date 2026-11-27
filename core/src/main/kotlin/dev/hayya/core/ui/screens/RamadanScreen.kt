@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -50,11 +51,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.batoulapps.adhan.Coordinates
 import dev.hayya.core.domain.calculation.PrayerCalculationEngine
 import dev.hayya.core.domain.model.PrayerType
@@ -68,10 +74,13 @@ import dev.hayya.core.domain.ramadan.RamadanDuasStore
 import dev.hayya.core.domain.ramadan.RamadanSettings
 import dev.hayya.core.ui.components.PrayerCelestialIcon
 import dev.hayya.core.ui.components.SectionPageHeader
+import dev.hayya.core.ui.theme.ArabicScriptText
 import dev.hayya.core.ui.theme.TabularClockStyle
 import dev.hayya.core.ui.theme.TabularCountdownStyle
+import dev.hayya.core.ui.viewmodel.PrayerCountdownUiState
 import dev.hayya.core.ui.viewmodel.PrayerDashboardUiState
 import dev.hayya.core.ui.viewmodel.PrayerViewModel
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
@@ -102,7 +111,8 @@ fun RamadanScreen(
     onUpdateQadhaMadeUp: (Int) -> Unit,
     onUpdateSuhoorAlarm: (Boolean, Int?) -> Unit,
     onUpdateIftarAlert: (Boolean) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    countdownStateFlow: StateFlow<PrayerCountdownUiState>? = null
 ) {
     var selectedSection by remember { mutableStateOf(RamadanHubSection.TRACKER) }
     var selectedDuaCategory by remember { mutableStateOf(RamadanDuaCategory.ALL) }
@@ -134,6 +144,7 @@ fun RamadanScreen(
             ) {
                 SuhoorIftarHeroCard(
                     state = state,
+                    countdownStateFlow = countdownStateFlow,
                     onToggleTodayFast = {
                         view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
                         onToggleTodayFast()
@@ -219,6 +230,7 @@ fun RamadanScreen(
 @Composable
 private fun SuhoorIftarHeroCard(
     state: PrayerDashboardUiState,
+    countdownStateFlow: StateFlow<PrayerCountdownUiState>?,
     onToggleTodayFast: () -> Unit
 ) {
     Card(
@@ -303,9 +315,12 @@ private fun SuhoorIftarHeroCard(
                     .padding(vertical = 14.dp, horizontal = 16.dp),
                 contentAlignment = Alignment.Center
             ) {
+                val liveTick = countdownStateFlow?.collectAsStateWithLifecycle()?.value
+                val liveFastingCountdown = liveTick?.fastingCountdown ?: state.fastingCountdown
+                val liveIsToIftar = liveTick?.isFastingCountdownToIftar ?: state.isFastingCountdownToIftar
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
-                        text = if (state.isFastingCountdownToIftar) "Time Until Iftar" else "Time Until Suhoor Ends",
+                        text = if (liveIsToIftar) "Time Until Iftar" else "Time Until Suhoor Ends",
                         style = MaterialTheme.typography.labelLarge.copy(
                             fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.primary
@@ -313,7 +328,7 @@ private fun SuhoorIftarHeroCard(
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = state.fastingCountdown,
+                        text = liveFastingCountdown,
                         style = TabularCountdownStyle.copy(
                             fontSize = 32.sp,
                             fontWeight = FontWeight.Bold,
@@ -442,7 +457,10 @@ private fun FastingTrackerSection(
 
         Spacer(modifier = Modifier.height(10.dp))
 
-        val start = IslamicCalendarHelper.getRamadanStartDate(state.islamicDateInfo.hijriYear)
+        val start = IslamicCalendarHelper.getRamadanStartDate(
+            hijriYear = state.islamicDateInfo.hijriYear,
+            hijriOffsetDays = state.userPreferences.hijriDayOffsetDays
+        )
         val days = (0 until 30).map { start.plus(it, DateTimeUnit.DAY) }
 
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -459,6 +477,7 @@ private fun FastingTrackerSection(
                         Box(
                             modifier = Modifier
                                 .weight(1f)
+                                .heightIn(min = 48.dp)
                                 .clip(RoundedCornerShape(12.dp))
                                 .background(
                                     when (status) {
@@ -556,20 +575,31 @@ private fun FastingTrackerSection(
                     )
                 }
 
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
                     Box(
                         modifier = Modifier
-                            .size(36.dp)
+                            .size(48.dp)
                             .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.surfaceVariant)
                             .clickable {
                                 if (progress.qadhaMadeUpCount > 0) {
                                     onUpdateQadhaMadeUp(progress.qadhaMadeUpCount - 1)
                                 }
+                            }
+                            .semantics {
+                                role = Role.Button
+                                contentDescription = "Decrease completed Qadha fasts"
                             },
                         contentAlignment = Alignment.Center
                     ) {
-                        Text("−", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.surfaceVariant),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("−", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                        }
                     }
 
                     Text(
@@ -579,15 +609,26 @@ private fun FastingTrackerSection(
 
                     Box(
                         modifier = Modifier
-                            .size(36.dp)
+                            .size(48.dp)
                             .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.primaryContainer)
                             .clickable {
                                 onUpdateQadhaMadeUp(progress.qadhaMadeUpCount + 1)
+                            }
+                            .semantics {
+                                role = Role.Button
+                                contentDescription = "Increase completed Qadha fasts"
                             },
                         contentAlignment = Alignment.Center
                     ) {
-                        Text("+", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.primaryContainer),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("+", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                        }
                     }
                 }
             }
@@ -717,14 +758,14 @@ private fun DuaCard(dua: RamadanDua) {
 
             Spacer(modifier = Modifier.height(14.dp))
 
-            Text(
+            ArabicScriptText(
                 text = dua.arabicText,
                 fontSize = 22.sp,
-                fontWeight = FontWeight.Bold,
                 lineHeight = 36.sp,
-                textAlign = TextAlign.End,
-                modifier = Modifier.fillMaxWidth(),
-                color = MaterialTheme.colorScheme.onSurface
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Start,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.fillMaxWidth()
             )
 
             Spacer(modifier = Modifier.height(10.dp))
@@ -767,7 +808,10 @@ private fun TimetableSection(
     calculationEngine: PrayerCalculationEngine
 ) {
     val hijriYear = state.islamicDateInfo.hijriYear
-    val startDate = remember(hijriYear) { IslamicCalendarHelper.getRamadanStartDate(hijriYear) }
+    val hijriOffset = state.userPreferences.hijriDayOffsetDays
+    val startDate = remember(hijriYear, hijriOffset) {
+        IslamicCalendarHelper.getRamadanStartDate(hijriYear, hijriOffset)
+    }
     val timeZone = TimeZone.currentSystemDefault()
     val coordinates = remember(state.userPreferences.location) {
         Coordinates(state.userPreferences.location.latitude, state.userPreferences.location.longitude)
@@ -926,9 +970,10 @@ private fun EidSection() {
                     )
                 )
                 Spacer(modifier = Modifier.height(6.dp))
-                Text(
+                ArabicScriptText(
                     text = "تَقَبَّلَ اللَّهُ مِنَّا وَمِنْكُمْ",
                     fontSize = 24.sp,
+                    lineHeight = 36.sp,
                     fontWeight = FontWeight.Bold,
                     textAlign = TextAlign.Center,
                     color = MaterialTheme.colorScheme.onSurface
@@ -995,14 +1040,14 @@ private fun EidSection() {
 
                 Spacer(modifier = Modifier.height(14.dp))
 
-                Text(
+                ArabicScriptText(
                     text = "اللَّهُ أَكْبَرُ اللَّهُ أَكْبَرُ لَا إِلَهَ إِلَّا اللَّهُ، وَاللَّهُ أَكْبَرُ اللَّهُ أَكْبَرُ وَلِلَّهِ الْحَمْدُ",
                     fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold,
                     lineHeight = 34.sp,
-                    textAlign = TextAlign.End,
-                    modifier = Modifier.fillMaxWidth(),
-                    color = MaterialTheme.colorScheme.onSurface
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Start,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.fillMaxWidth()
                 )
 
                 Spacer(modifier = Modifier.height(10.dp))

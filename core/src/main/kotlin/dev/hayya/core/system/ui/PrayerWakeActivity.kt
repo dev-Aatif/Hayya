@@ -43,6 +43,16 @@ class PrayerWakeActivity : ComponentActivity() {
     private val playbackFinishedReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action == PrayerAudioService.ACTION_PLAYBACK_FINISHED) {
+                val finishedNotificationId = intent.getIntExtra(
+                    PrayerAudioService.EXTRA_NOTIFICATION_ID,
+                    -1
+                )
+                if (finishedNotificationId != -1 &&
+                    currentNotificationId != -1 &&
+                    finishedNotificationId != currentNotificationId
+                ) {
+                    return
+                }
                 cancelWakeNotification()
                 if (isDuaSheetOpen) {
                     pendingFinishAfterDua = true
@@ -158,16 +168,13 @@ class PrayerWakeActivity : ComponentActivity() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
             setShowWhenLocked(true)
             setTurnScreenOn(true)
-            val keyguardManager = getSystemService(Context.KEYGUARD_SERVICE) as? android.app.KeyguardManager
-            keyguardManager?.requestDismissKeyguard(this, null)
         }
 
         @Suppress("DEPRECATION")
         window.addFlags(
             WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
                 WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON or
-                WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
-                WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD
+                WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
         )
     }
 

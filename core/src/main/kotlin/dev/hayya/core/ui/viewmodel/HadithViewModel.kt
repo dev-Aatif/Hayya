@@ -233,7 +233,11 @@ class HadithViewModel(
     fun syncCategory(category: HadithCategorySyncInfo) {
         if (_uiState.value.syncingCategoryId != null || _uiState.value.downloadingBookId != null) return
         viewModelScope.launch {
-            val nextPage = (category.syncedCount / 20) + 1
+            val nextPage = if (category.syncedPages > 0) {
+                category.syncedPages + 1
+            } else {
+                (category.syncedCount / 20) + 1
+            }
             _uiState.update {
                 it.copy(
                     syncingCategoryId = category.id,

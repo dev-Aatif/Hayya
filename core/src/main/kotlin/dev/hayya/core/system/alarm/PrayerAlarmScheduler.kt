@@ -126,6 +126,7 @@ class PrayerAlarmScheduler(
         val timeoutSeconds = userPrefs.autoSilenceTimeout.seconds ?: 0
         val escalationSeconds = userPrefs.volumeEscalation.seconds
         val iftarNotificationEnabled = resolvedRamadanSettings?.iftarNotificationEnabled ?: true
+        val hijriOffsetDays = userPrefs.hijriDayOffsetDays
         for (alert in filteredAlerts) {
             scheduleSingleAlert(
                 alert = alert,
@@ -133,7 +134,8 @@ class PrayerAlarmScheduler(
                 autoSilenceSeconds = timeoutSeconds,
                 showPostAdhanDua = userPrefs.showPostAdhanDua,
                 volumeEscalationSeconds = escalationSeconds,
-                iftarNotificationEnabled = iftarNotificationEnabled
+                iftarNotificationEnabled = iftarNotificationEnabled,
+                hijriOffsetDays = hijriOffsetDays
             )
         }
 
@@ -234,6 +236,7 @@ class PrayerAlarmScheduler(
             TAG,
             "Successfully scheduled ${filteredAlerts.size} rolling prayer alarms starting $effectiveStartDate"
         )
+        recordScheduledWindow(effectiveStartDate, daysAhead)
 
         return filteredAlerts
     }
@@ -250,7 +253,8 @@ class PrayerAlarmScheduler(
         autoSilenceSeconds: Int = 60,
         showPostAdhanDua: Boolean = true,
         volumeEscalationSeconds: Int = 0,
-        iftarNotificationEnabled: Boolean = true
+        iftarNotificationEnabled: Boolean = true,
+        hijriOffsetDays: Int = 0
     ) {
         val requestCode = alert.notificationId
 
@@ -264,6 +268,7 @@ class PrayerAlarmScheduler(
             putExtra(EXTRA_AUTO_SILENCE_SECONDS, autoSilenceSeconds)
             putExtra(EXTRA_VOLUME_ESCALATION_SECONDS, volumeEscalationSeconds)
             putExtra(EXTRA_IFTAR_NOTIFICATION_ENABLED, iftarNotificationEnabled)
+            putExtra(EXTRA_HIJRI_OFFSET_DAYS, hijriOffsetDays)
             putExtra(PrayerWakeActivity.EXTRA_SHOW_POST_ADHAN_DUA, showPostAdhanDua)
         }
 
@@ -379,15 +384,25 @@ class PrayerAlarmScheduler(
     }
 
     /**
-     * Cancels all rolling alarms for the next [daysAhead] consecutive days starting from [startDate].
+     * Cancels all rolling alarms across `[startDate - daysBack, startDate + daysAhead)`
+     * plus any previously recorded rolling window (protecting against large backward clock jumps).
      */
     fun cancelAllScheduledAlarms(
         startDate: LocalDate = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date,
-        daysAhead: Int = 7
+        daysAhead: Int = 7,
+        daysBack: Int = 7
     ) {
-        for (dayIndex in 0 until daysAhead) {
-            val date = startDate.plus(dayIndex, DateTimeUnit.DAY)
-            val dayOfYear = date.dayOfYear
+        val targetDaysOfYear = LinkedHashSet<Int>()
+        for (dayIndex in -daysBack until daysAhead) {
+            targetDaysOfYear.add(startDate.plus(dayIndex, DateTimeUnit.DAY).dayOfYear)
+        }
+        readRecordedWindow()?.let { (recordedStartEpochDays, recordedDaysAhead) ->
+            val recordedStart = LocalDate.fromEpochDays(recordedStartEpochDays)
+            for (dayIndex in 0 until recordedDaysAhead) {
+                targetDaysOfYear.add(recordedStart.plus(dayIndex, DateTimeUnit.DAY).dayOfYear)
+            }
+        }
+        for (dayOfYear in targetDaysOfYear) {
             for (prayer in PrayerType.entries) {
                 for (tier in AlertTier.entries) {
                     val id = ScheduledAlert.createNotificationId(dayOfYear, prayer, tier)
@@ -395,7 +410,28 @@ class PrayerAlarmScheduler(
                 }
             }
         }
-        Log.i(TAG, "Cancelled all rolling alarms for $daysAhead days starting from $startDate")
+        Log.i(TAG, "Cancelled rolling alarms across ${targetDaysOfYear.size} days around $startDate")
+    }
+
+    private fun recordScheduledWindow(startDate: LocalDate, daysAhead: Int) {
+        runCatching {
+            val prefs = context.getSharedPreferences(SCHEDULER_PREFS_NAME, Context.MODE_PRIVATE) ?: return
+            prefs.edit()
+                .putInt(KEY_LAST_START_EPOCH_DAYS, startDate.toEpochDays())
+                .putInt(KEY_LAST_DAYS_AHEAD, daysAhead)
+                .apply()
+        }
+    }
+
+    private fun readRecordedWindow(): Pair<Int, Int>? {
+        return runCatching {
+            val prefs = context.getSharedPreferences(SCHEDULER_PREFS_NAME, Context.MODE_PRIVATE)
+                ?: return null
+            if (!prefs.contains(KEY_LAST_START_EPOCH_DAYS)) return null
+            val startDays = prefs.getInt(KEY_LAST_START_EPOCH_DAYS, 0)
+            val daysAhead = prefs.getInt(KEY_LAST_DAYS_AHEAD, 7)
+            startDays to daysAhead
+        }.getOrNull()
     }
 
     /**
@@ -651,6 +687,9 @@ class PrayerAlarmScheduler(
 
     companion object {
         private const val TAG = "PrayerAlarmScheduler"
+        private const val SCHEDULER_PREFS_NAME = "hayya_alarm_scheduler_state"
+        private const val KEY_LAST_START_EPOCH_DAYS = "last_start_epoch_days"
+        private const val KEY_LAST_DAYS_AHEAD = "last_days_ahead"
 
         const val ACTION_TRIGGER_PRAYER_ALARM = "dev.hayya.alarm.ACTION_TRIGGER_PRAYER_ALARM"
         const val ACTION_RESTORE_RINGER_MODE = "dev.hayya.alarm.ACTION_RESTORE_RINGER_MODE"
@@ -676,6 +715,7 @@ class PrayerAlarmScheduler(
         const val EXTRA_AUTO_SILENCE_SECONDS = "extra_auto_silence_seconds"
         const val EXTRA_VOLUME_ESCALATION_SECONDS = "extra_volume_escalation_seconds"
         const val EXTRA_IFTAR_NOTIFICATION_ENABLED = "extra_iftar_notification_enabled"
+        const val EXTRA_HIJRI_OFFSET_DAYS = "extra_hijri_offset_days"
         const val EXTRA_FAJR_MILLIS = "extra_fajr_millis"
         const val EXTRA_EID_TITLE = "extra_eid_title"
         const val EXTRA_EID_MESSAGE = "extra_eid_message"

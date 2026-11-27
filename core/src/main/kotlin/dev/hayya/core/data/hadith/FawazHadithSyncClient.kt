@@ -49,32 +49,81 @@ class FawazHadithSyncClient(
             return Result.failure(IllegalStateException("No Arabic, English, or Urdu editions found for ${book.title}"))
         }
 
-        val parsedByKey = LinkedHashMap<String, FawazParsedEdition>()
         val downloadedLangs = mutableListOf<String>()
+        var arMap: Map<String, FawazRawHadith> = emptyMap()
+        var enMap: Map<String, FawazRawHadith> = emptyMap()
+        var urMap: Map<String, FawazRawHadith> = emptyMap()
+        var sectionsAr: Map<String, String> = emptyMap()
+        var sectionsEn: Map<String, String> = emptyMap()
+        var sectionsUr: Map<String, String> = emptyMap()
+        var arOrder: List<String> = emptyList()
+        var enOrder: List<String> = emptyList()
+        var urOrder: List<String> = emptyList()
 
-        suspend fun fetchAndParse(desc: FawazEditionDescriptor?, label: String, code: String) {
-            if (desc == null) return
+        suspend fun fetchAndIndex(desc: FawazEditionDescriptor?, label: String, code: String): FawazParsedEdition? {
+            if (desc == null) return null
             onStageProgress("Downloading ${book.title} ($label)…")
-            val json = httpTransport.getText(desc.downloadUrl).getOrNull() ?: return
-            val parsed = FawazHadithJsonParser.parseEditionBook(json) ?: return
-            parsedByKey[code] = parsed
+            val json = httpTransport.getText(desc.downloadUrl).getOrNull() ?: return null
+            val parsed = FawazHadithJsonParser.parseEditionBook(json) ?: return null
             downloadedLangs.add(code.uppercase())
+            return parsed
         }
 
-        fetchAndParse(arabicDesc, "Arabic", "ar")
-        fetchAndParse(englishDesc, "English", "en")
-        fetchAndParse(urduDesc, "Urdu", "ur")
+        // Fetch, index, and drop each edition sequentially (preserving AR -> EN -> UR order)
+        fetchAndIndex(arabicDesc, "Arabic", "ar")?.let { arEd ->
+            sectionsAr = arEd.sections
+            val map = HashMap<String, FawazRawHadith>(arEd.hadiths.size)
+            val order = ArrayList<String>(arEd.hadiths.size)
+            arEd.hadiths.forEach {
+                order.add(it.hadithNumber)
+                map[it.hadithNumber] = it
+            }
+            arOrder = order
+            arMap = map
+        }
+        fetchAndIndex(englishDesc, "English", "en")?.let { enEd ->
+            sectionsEn = enEd.sections
+            val map = HashMap<String, FawazRawHadith>(enEd.hadiths.size)
+            val order = ArrayList<String>(enEd.hadiths.size)
+            enEd.hadiths.forEach {
+                order.add(it.hadithNumber)
+                map[it.hadithNumber] = it
+            }
+            enOrder = order
+            enMap = map
+        }
+        fetchAndIndex(urduDesc, "Urdu", "ur")?.let { urEd ->
+            sectionsUr = urEd.sections
+            val map = HashMap<String, FawazRawHadith>(urEd.hadiths.size)
+            val order = ArrayList<String>(urEd.hadiths.size)
+            urEd.hadiths.forEach {
+                order.add(it.hadithNumber)
+                map[it.hadithNumber] = it
+            }
+            urOrder = order
+            urMap = map
+        }
 
-        if (parsedByKey.isEmpty()) {
+        val orderedNumbers = LinkedHashSet<String>(enOrder.size + arOrder.size + urOrder.size).apply {
+            addAll(enOrder)
+            addAll(arOrder)
+            addAll(urOrder)
+        }
+
+        if (orderedNumbers.isEmpty()) {
             return Result.failure(IllegalStateException("Unable to download editions for ${book.title}"))
         }
 
         onStageProgress("Indexing ${book.title} offline…")
-        val entries = mergeEditions(
+        val entries = mergeEditionsFromMaps(
             book = book,
-            arabicEdition = parsedByKey["ar"],
-            englishEdition = parsedByKey["en"],
-            urduEdition = parsedByKey["ur"]
+            orderedNumbers = orderedNumbers,
+            arMap = arMap,
+            enMap = enMap,
+            urMap = urMap,
+            sectionsAr = sectionsAr,
+            sectionsEn = sectionsEn,
+            sectionsUr = sectionsUr
         )
         if (entries.isEmpty()) {
             return Result.failure(IllegalStateException("Downloaded book '${book.title}' contained no Hadiths"))
@@ -110,27 +159,17 @@ class FawazHadithSyncClient(
         return descriptors.firstOrNull { it.name.startsWith("$prefix-", ignoreCase = true) }
     }
 
-    private fun mergeEditions(
+    private fun mergeEditionsFromMaps(
         book: HadithBookInfo,
-        arabicEdition: FawazParsedEdition?,
-        englishEdition: FawazParsedEdition?,
-        urduEdition: FawazParsedEdition?
+        orderedNumbers: Set<String>,
+        arMap: Map<String, FawazRawHadith>,
+        enMap: Map<String, FawazRawHadith>,
+        urMap: Map<String, FawazRawHadith>,
+        sectionsAr: Map<String, String>,
+        sectionsEn: Map<String, String>,
+        sectionsUr: Map<String, String>
     ): List<HadithEntry> {
-        val arMap = arabicEdition?.hadiths?.associateBy { it.hadithNumber }.orEmpty()
-        val enMap = englishEdition?.hadiths?.associateBy { it.hadithNumber }.orEmpty()
-        val urMap = urduEdition?.hadiths?.associateBy { it.hadithNumber }.orEmpty()
-
-        val allNumbers = LinkedHashSet<String>().apply {
-            englishEdition?.hadiths?.forEach { add(it.hadithNumber) }
-            arabicEdition?.hadiths?.forEach { add(it.hadithNumber) }
-            urduEdition?.hadiths?.forEach { add(it.hadithNumber) }
-        }
-
-        val sectionsEn = englishEdition?.sections.orEmpty()
-        val sectionsAr = arabicEdition?.sections.orEmpty()
-        val sectionsUr = urduEdition?.sections.orEmpty()
-
-        return allNumbers.mapNotNull { number ->
+        return orderedNumbers.mapNotNull { number ->
             val ar = arMap[number]
             val en = enMap[number]
             val ur = urMap[number]

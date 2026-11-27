@@ -23,30 +23,30 @@ Built with pure Kotlin, Jetpack Compose (Material 3), and Jetpack Glance AppWidg
 ## Core Features
 
 ### Prayer Time & Astronomical Engine
-- **Offline-First & Private:** Zero analytics, zero ads, zero trackers. All prayer times, Hijri calendar dates (`java.time.chrono.HijrahDate`), Qibla bearings, city coordinates, and bundled starter Hadiths execute locally on-device.
-- **Dual Astronomical Solver:** Powered by Batoul Apps `adhan` (`1.2.1`) with an offline Jean Meeus solar solver (`SolarAstronomicalCalculator`).
+- **Offline-First & Private:** Zero analytics, zero ads, zero trackers. All prayer times, Hijri calendar dates (`java.time.chrono.HijrahDate` with configurable **-2d to +2d** regional moonsighting offset for Pakistan Ruet-e-Hilal), Qibla bearings, city coordinates, and bundled starter Hadiths execute locally on-device.
+- **Dual Astronomical Solver:** Powered by Batoul Apps `adhan` (`1.2.1`) with an offline Jean Meeus solar solver (`SolarAstronomicalCalculator`) fallback for extreme latitudes.
 - **Regional Mosque Conventions (`SindhMosqueSchedule`):** Models Sehri Ihtiyat (10m safety window), Ishraq, Zawal, pre-Maghrib Makrooh buffers, and seasonal Summer/Winter Adhan-to-Jama'at intervals.
 - **Larkana Division Offline Directory:** Covers 37 municipal corporations, taluka headquarters, and town committees across Larkana, Qambar Shahdadkot, Shikarpur, Jacobabad, and Kashmore.
 
 ### Alarms & Mosque Mode
-- **3-Tier Alert Pipeline:** Optional 15-minute Pre-Reminder (`T0 - 15m`), Main Call (`T0`) with lockscreen `FullScreenIntent` wake, and 20-minute Last Call warning (`T_end - 20m`).
-- **Familiar Alarm Audio:** Uses your device's default alarm tone (`RingtoneManager.TYPE_ALARM`) on `USAGE_ALARM`, with optional gradual volume escalation (`10s–30s`) and smooth 2-second fade-out.
-- **Mosque Auto-Silent (`AutoMuteManager`):** Automatically switches the ringer to Silent (via Do Not Disturb access) or Vibrate during Salah (`15–30m`) and Jumu'ah Khutbah (`45–60m`), saving and restoring exact prior ringer mode and stream volumes.
+- **3-Tier Alert Pipeline:** Optional 15-minute Pre-Reminder (`T0 - 15m`), Main Call (`T0`) with lockscreen `FullScreenIntent` wake (using `setShowWhenLocked` without forcing premature keyguard unlock), and 20-minute Last Call warning (`T_end - 20m`).
+- **Familiar Alarm Audio:** Uses your device's default alarm tone (`RingtoneManager.TYPE_ALARM`) on `USAGE_ALARM`, with dedicated foreground notification IDs/actions, transient `AudioFocus` handling, active phone/VoIP call suppression (`MODE_IN_CALL` / `MODE_IN_COMMUNICATION`), optional gradual volume escalation (`10s–30s`), and smooth 2-second fade-out.
+- **Mosque Auto-Silent (`AutoMuteManager`):** Automatically switches the ringer to Silent (via Do Not Disturb access) or Vibrate during Salah (`15–30m`) and Jumu'ah Khutbah (`45–60m`), saving exact prior ringer mode and stream volumes and retaining recovery state with an actionable prompt if DND access is revoked mid-window.
 
 ### Hadith Hub & Shareable Status Cards
-- **Multilingual Offline Library:** Bundled authentic starter Hadiths across 5 spiritual pillars (Prayer & Worship, Creed, Virtues, Manners, Quran & Tafsir) in **Arabic, English, Urdu, and Sindhi**, stored locally in SQLite + FTS4 with Noto Naskh Arabic typography.
-- **Optional On-Demand Sync:** Download thematic packs from HadeethEnc.com (with Sindhi support) or full canonical Hadith collections (40 Nawawi, 40 Qudsi, Sahih al-Bukhari, Sahih Muslim, Tirmidhi, Abu Dawud, Nasa'i, Ibn Majah, Muwatta Malik) from `fawazahmed0/hadith-api`.
-- **WhatsApp Status Card Generator & Sunrise Reminder:** Export clean `9:16` or `1:1` PNG cards (`HadithStatusCardRenderer`) and receive an optional daily Sunrise Hadith notification.
+- **Multilingual Offline Library:** Bundled authentic starter Hadiths across 5 spiritual pillars (Prayer & Worship, Creed, Virtues, Manners, Quran & Tafsir) in **Arabic, English, Urdu, and Sindhi**, stored locally in SQLite + FTS4 (`docid`-indexed updates and sanitized queries) with Noto Naskh Arabic RTL typography across Hadith, Dua, Takbirat, Tasbih, and Wake views.
+- **Optional On-Demand Sync:** Download thematic packs from HadeethEnc.com (with resumable page tracking and Sindhi support) or full canonical Hadith collections (40 Nawawi, 40 Qudsi, Sahih al-Bukhari, Sahih Muslim, Tirmidhi, Abu Dawud, Nasa'i, Ibn Majah, Muwatta Malik) from `fawazahmed0/hadith-api`.
+- **WhatsApp Status Card Generator & Sunrise Reminder:** Export clean `9:16` or `1:1` PNG cards (`HadithStatusCardRenderer` with RTL bidi directionality and safe canvas clipping) and receive an optional daily Sunrise Hadith notification.
 
 ### Spiritual Companion, Widgets & In-App Updates
-- **Companion Suite:** Live Qibla compass (`QiblaOrientationSensor`), tactile OLED Tasbih counter, 7-day Prayer Habits tracker, Night & Tahajjud calculator (Islamic Midnight & Last Third), Friday (Jumu'ah) checklist & Salawat counter, and Ramadan & Eid Hub (30-day timetable, fast tracker, Qadha counter, Sunnah Duas, Suhoor wake-up alarm).
+- **Companion Suite:** True-north magnetic-declination-calibrated Qibla compass (`QiblaOrientationSensor` + `GeomagneticField`, lifecycle-aware pause/resume), tactile OLED Tasbih counter, 7-day Prayer Habits tracker, Night & Tahajjud calculator (Islamic Midnight & Last Third), Friday (Jumu'ah) checklist & Salawat counter, and Ramadan & Eid Hub (30-day timetable, fast tracker, Qadha counter, Sunnah Duas, Suhoor wake-up alarm).
 - **5 Jetpack Glance Home Screen Widgets:**
   - `Hayya Next Prayer` (`2x2`) — Upcoming prayer, countdown, and window progress bar
   - `Hayya Full Timetable` (`4x2`) — Dual-pane next prayer hero and full 5-prayer schedule
   - `Hayya Daily Prayers` (`4x2`) — Interactive 1-tap prayer check-off tracker
   - `Hayya Quick Strip` (`4x1`) — Compact bar with interactive prayer completion pips
   - `Hayya Night & Fasting` (`3x2`) — Suhoor, Iftar, Last Third (Tahajjud), and Midnight times
-- **In-App GitHub Releases Updater (`AppUpdateEngine`):** Optional update checker against GitHub Releases with fail-closed SHA-256 verification and guided APK installation.
+- **In-App GitHub Releases Updater (`AppUpdateEngine`):** User-togglable update checker (`Auto-Check Updates on Launch`, disableable for strict zero-network operation) enforcing strict HTTPS GitHub host allowlisting across redirects and fail-closed SHA-256 checksum verification before guided APK installation.
 - **Visual Craft:** Pure OLED Dark (`#07080A` / `#000000` lockscreen), Warm Sand Light (`#F8F4EC`), System Auto, optional Material You dynamic color (Android 12+), and `tnum` tabular figures for jitter-free countdowns.
 
 ---
@@ -71,8 +71,8 @@ Built with pure Kotlin, Jetpack Compose (Material 3), and Jetpack Glance AppWidg
 
 1. **Doze Bypass (`AlarmManager.setAlarmClock`):** Schedules a 7-day rolling queue exclusively via `AlarmManager.setAlarmClock` with deterministic request codes: `requestCode = (dayOfYear * 100) + (prayerOrdinal * 10) + tierOrdinal`.
 2. **WakeLock Safety Contract:** `PrayerAlarmReceiver` acquires a bounded `PARTIAL_WAKE_LOCK` inside `goAsync()`, dispatches notifications or starts `PrayerAudioService`, and releases the WakeLock in `finally`.
-3. **Foreground Protection:** `PrayerAudioService` (`mediaPlayback`) manages alarm playback; an optional `PinnedPrayerStatusService` (`specialUse`) anchors the process against aggressive OEM Low Memory Killers.
-4. **Reboot & Clock Resilience (`SystemClockChangedReceiver`):** Intercepts `BOOT_COMPLETED`, `TIME_SET`, `TIMEZONE_CHANGED`, and `MY_PACKAGE_REPLACED` to rebuild the 7-day rolling queue, refresh Glance widgets, and recover interrupted auto-mute state.
+3. **Foreground Protection & Safe Shutdown:** `PrayerAudioService` (`mediaPlayback`) uses a dedicated foreground notification ID decoupled from `CHANNEL_MAIN_CALL` alerts; an optional `PinnedPrayerStatusService` (`specialUse`) anchors the process and falls back gracefully to a static ongoing notification when Android 12–16 restricts background FGS starts from system broadcasts.
+4. **Reboot & Clock Resilience (`SystemClockChangedReceiver`):** Validates incoming system actions (`BOOT_COMPLETED`, `TIME_SET`, `TIMEZONE_CHANGED`, `MY_PACKAGE_REPLACED`), runs inside an 8-second `goAsync()`/`WakeLock` budget, clears prior/shifted alarm windows on backward clock jumps, refreshes Glance widgets once via `PrayerWidgetReceiver`, and recovers interrupted auto-mute state.
 
 ---
 

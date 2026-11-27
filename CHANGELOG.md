@@ -2,6 +2,26 @@
 
 All notable changes to **Hayya** will be documented in this file.
 
+## [Unreleased]
+
+Security, reliability, performance, and UX hardening pass on top of `1.1.0`:
+
+### Security & Privacy
+- **Fail-Closed Updater (`AppUpdateEngine`, `MainActivity`)**: Required valid HTTPS SHA-256 verification assets (`downloadAndVerifyApk` now fails closed when missing), enforced exact HTTPS GitHub host allowlisting across redirects and external browser intents, and capped `getText` response reads at 32 MiB.
+- **Zero-Network Toggle (`SettingsScreen`, `PrayerViewModel`, `UserPreferencesRepository`)**: Added **Auto-Check Updates on Launch** setting so users can disable automatic launch checks and restrict GitHub Releases access strictly to manual taps.
+- **Exported Receiver & Broadcast Hardening (`SystemClockChangedReceiver`, `AndroidManifest.xml`)**: Validated incoming actions on `SystemClockChangedReceiver` against allowed system intents before acquiring WakeLock, and removed `ACTION_PRAYER_DATA_CHANGED` from public per-widget receiver filters.
+
+### Reliability & Performance
+- **Audio & Lockscreen Alarm Fixes (`PrayerAudioService`, `PrayerAlarmReceiver`, `PrayerWakeActivity`)**: Separated service foreground notification ID (`FOREGROUND_NOTIFICATION_ID = 99998`) and `PendingIntent` request codes from `CHANNEL_MAIN_CALL` / Suhoor wake alerts; added `AudioFocusRequest` handling and active voice/VoIP call suppression; scoped `ACTION_PLAYBACK_FINISHED` by notification ID; removed automatic `requestDismissKeyguard` prompt on lockscreen display.
+- **Receiver Bounds, FGS Fallback & Auto-Mute Safety (`PinnedPrayerStatusService`, `PrayerAlarmScheduler`, `AutoMuteManager`)**: Tightened `SystemClockChangedReceiver` WakeLock/`goAsync()` timeout to 8s, added notification fallback when Android 12–16 blocks background `specialUse` FGS startup, expanded `cancelAllScheduledAlarms` across prior/shifted windows, preserved `AutoMuteManager` saved ringer state with an actionable recovery notification on `SecurityException`, and added `ReplaceFileCorruptionHandler` + atomic DataStore `Tasbih`/`Salawat` counters.
+- **Widget Fan-Out, Countdown Isolation & SQLite FTS4 Scaling (`PrayerWidgetUpdater`, `PrayerWidgetReceiver`, `PrayerViewModel`, `HadithDatabase`, `FawazHadithSyncClient`, `HadithViewModel`)**: Eliminated `25x` redundant widget refresh broadcasts + added mutex serialization, isolated 1-second `countdownState` ticks from `MainActivity` root, migrated `HadithDatabase` (`v3`) to `docid`-mapped FTS4 deletes + safe query escaping + `synced_pages` pagination tracking, and lowered peak memory via sequential edition indexing in `FawazHadithSyncClient`.
+- **CI R8 Mapping Archival (`.github/workflows/android.yml`)**: Uploaded `core/build/outputs/mapping/release/mapping.txt` with release build artifacts.
+
+### UX, Astronomy & Accessibility
+- **Regional Hijri Moonsighting Offset (`RamadanModels`, `SettingsScreen`, `PrayerViewModel`, `PrayerWidgetUpdater`)**: Added `-2..+2` day Hijri adjustment (including Pakistan Ruet-e-Hilal alignment) across dashboard, Ramadan timetable, widgets, and alarms, and replaced hardcoded Ramadan fallback with neutral `1 Muharram 1447 AH`.
+- **True-North Qibla & Sensor Lifecycle (`QiblaOrientationSensor`, `QiblaScreen`)**: Applied `GeomagneticField` magnetic declination correction and tied sensor registration to `ON_RESUME`/`ON_PAUSE`.
+- **Unified Arabic/Urdu/Sindhi RTL & Card Rendering (`Theme`, `HadithStatusCardRenderer`, `HadithSheets`, Companion Screens)**: Added shared `ArabicScriptText` (`Noto Naskh Arabic` + RTL) across Tools, Wake, Ramadan, Friday Guide, and Tasbih screens; added `TextDirectionHeuristics.RTL` and body clipping in `HadithStatusCardRenderer`; removed eager preview `Bitmap.recycle()`; improved `320dp`/scaled responsiveness and `48dp` accessible touch targets; moved `mipmap-anydpi-v26` to `mipmap-anydpi`.
+
 ## [1.1.0] — 2026-11-26
 
 Feature release adding the multilingual offline-first **Hadith Hub**, **GitHub Releases In-App Updater**, and V1 polish fixes.

@@ -137,8 +137,10 @@ class PrayerAlarmReceiver : BroadcastReceiver() {
                     action = PrayerAudioService.ACTION_START_ALARM
                     putExtra(PrayerAudioService.EXTRA_NOTIFICATION_ID, PrayerAlarmScheduler.NOTIFICATION_ID_SUHOOR)
                     putExtra(PrayerAudioService.EXTRA_PRAYER_NAME, "Suhoor")
+                    putExtra(PrayerAudioService.EXTRA_SUBTITLE, suhoorSubtitle)
                     putExtra(PrayerAudioService.EXTRA_TIMEOUT_SECONDS, autoSilenceSeconds)
                     putExtra(PrayerAudioService.EXTRA_VOLUME_ESCALATION_SECONDS, volumeEscalationSeconds)
+                    putExtra(PrayerAudioService.EXTRA_SHOW_POST_ADHAN_DUA, false)
                 }
                 ContextCompat.startForegroundService(context, serviceIntent)
 
@@ -393,6 +395,10 @@ class PrayerAlarmReceiver : BroadcastReceiver() {
                 PrayerAlarmScheduler.EXTRA_IFTAR_NOTIFICATION_ENABLED,
                 true
             )
+            val hijriOffsetDays = intent.getIntExtra(
+                PrayerAlarmScheduler.EXTRA_HIJRI_OFFSET_DAYS,
+                0
+            )
 
             val prayerType = prayerTypeName?.let {
                 runCatching { PrayerType.valueOf(it) }.getOrNull()
@@ -415,7 +421,13 @@ class PrayerAlarmReceiver : BroadcastReceiver() {
                     }
                     AlertTier.MAIN_CALL -> {
                         if (alertMode == AlertMode.GENTLE_BANNER) {
-                            handleGentleMainCall(context, notificationId, prayerType, iftarNotificationEnabled)
+                            handleGentleMainCall(
+                                context = context,
+                                notificationId = notificationId,
+                                prayerType = prayerType,
+                                iftarNotificationEnabled = iftarNotificationEnabled,
+                                hijriOffsetDays = hijriOffsetDays
+                            )
                         } else {
                             handleMainCall(
                                 context = context,
@@ -424,7 +436,8 @@ class PrayerAlarmReceiver : BroadcastReceiver() {
                                 autoSilenceSeconds = autoSilenceSeconds,
                                 showPostAdhanDua = showPostAdhanDua,
                                 volumeEscalationSeconds = volumeEscalationSeconds,
-                                iftarNotificationEnabled = iftarNotificationEnabled
+                                iftarNotificationEnabled = iftarNotificationEnabled,
+                                hijriOffsetDays = hijriOffsetDays
                             )
                         }
                     }
@@ -522,12 +535,13 @@ class PrayerAlarmReceiver : BroadcastReceiver() {
         context: Context,
         notificationId: Int,
         prayerType: PrayerType,
-        iftarNotificationEnabled: Boolean = true
+        iftarNotificationEnabled: Boolean = true,
+        hijriOffsetDays: Int = 0
     ) {
         val today = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
         val isFriday = today.dayOfWeek == DayOfWeek.FRIDAY
         val displayName = prayerType.displayName(isFriday)
-        val islamicDate = IslamicCalendarHelper.resolveIslamicDate(today)
+        val islamicDate = IslamicCalendarHelper.resolveIslamicDate(today, hijriOffsetDays)
         val isIftarAlert = prayerType == PrayerType.MAGHRIB && islamicDate.isRamadan && iftarNotificationEnabled
 
         val title = if (isIftarAlert) "🌙 Iftar Mubarak — Break Your Fast" else "Time for $displayName"
@@ -559,7 +573,8 @@ class PrayerAlarmReceiver : BroadcastReceiver() {
         autoSilenceSeconds: Int,
         showPostAdhanDua: Boolean = true,
         volumeEscalationSeconds: Int = 0,
-        iftarNotificationEnabled: Boolean = true
+        iftarNotificationEnabled: Boolean = true,
+        hijriOffsetDays: Int = 0
     ) {
         val today = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
         val isFriday = today.dayOfWeek == DayOfWeek.FRIDAY
@@ -591,11 +606,12 @@ class PrayerAlarmReceiver : BroadcastReceiver() {
             putExtra(PrayerAudioService.EXTRA_PRAYER_NAME, servicePrayerName)
             putExtra(PrayerAudioService.EXTRA_TIMEOUT_SECONDS, autoSilenceSeconds)
             putExtra(PrayerAudioService.EXTRA_VOLUME_ESCALATION_SECONDS, volumeEscalationSeconds)
+            putExtra(PrayerAudioService.EXTRA_SHOW_POST_ADHAN_DUA, showPostAdhanDua)
         }
 
         ContextCompat.startForegroundService(context, serviceIntent)
 
-        val islamicDate = IslamicCalendarHelper.resolveIslamicDate(today)
+        val islamicDate = IslamicCalendarHelper.resolveIslamicDate(today, hijriOffsetDays)
         val isIftarAlert = prayerType == PrayerType.MAGHRIB && islamicDate.isRamadan && iftarNotificationEnabled
 
         val notificationTitle = if (isIftarAlert) {

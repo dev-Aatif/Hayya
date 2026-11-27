@@ -116,4 +116,27 @@ class RamadanModelsTest {
         assertThat(EidGuide.eidAlAdhaSunnahs.any { it.title.contains("Tashreeq") }).isTrue()
         assertThat(EidGuide.eidAlAdhaSunnahs.any { it.title.contains("Qurbani") }).isTrue()
     }
+
+    @Test
+    fun islamicCalendarHelper_appliesRegionalHijriMoonsightingOffset() {
+        val tabularStart = IslamicCalendarHelper.getRamadanStartDate(1447, hijriOffsetDays = 0)
+        val pakistaniDelayedStart = IslamicCalendarHelper.getRamadanStartDate(1447, hijriOffsetDays = -1)
+
+        // When Hilal is seen 1 day later locally (offset = -1), 1 Ramadan lands 1 Gregorian day after tabular
+        assertThat(pakistaniDelayedStart.toEpochDays() - tabularStart.toEpochDays()).isEqualTo(1)
+
+        val resolvedAtDelayedStart = IslamicCalendarHelper.resolveIslamicDate(
+            date = pakistaniDelayedStart,
+            hijriOffsetDays = -1
+        )
+        assertThat(resolvedAtDelayedStart.hijriMonth).isEqualTo(9)
+        assertThat(resolvedAtDelayedStart.hijriDay).isEqualTo(1)
+        assertThat(resolvedAtDelayedStart.gregorianDate).isEqualTo(pakistaniDelayedStart)
+
+        val tabularDayWithPakistaniOffset = IslamicCalendarHelper.resolveIslamicDate(
+            date = tabularStart,
+            hijriOffsetDays = -1
+        )
+        assertThat(tabularDayWithPakistaniOffset.hijriMonth).isEqualTo(8) // Sha'ban before local sighting
+    }
 }

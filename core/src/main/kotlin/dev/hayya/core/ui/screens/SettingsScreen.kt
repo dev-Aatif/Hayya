@@ -61,6 +61,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -68,6 +72,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import dev.hayya.core.domain.ramadan.IslamicCalendarHelper
+import kotlinx.datetime.Clock
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
 import dev.hayya.core.domain.model.AutoMuteDuration
 import dev.hayya.core.domain.model.AutoMuteTargetMode
 import dev.hayya.core.domain.model.AutoSilenceTimeout
@@ -143,6 +151,8 @@ fun SettingsScreen(
     onSelectVolumeEscalation: (VolumeEscalationOption) -> Unit = {},
     onToggleTahajjudAlarm: (Boolean) -> Unit = {},
     onSelectCity: (CityPreset) -> Unit = {},
+    onUpdateHijriOffset: (Int) -> Unit = {},
+    onToggleAutoCheckUpdates: (Boolean) -> Unit = {},
     onOpenSetupGuide: () -> Unit = {},
     updateState: UpdateUiState = UpdateUiState(),
     onCheckForUpdates: () -> Unit = {},
@@ -165,6 +175,7 @@ fun SettingsScreen(
                     isBatteryOptimizationIgnored = isBatteryOptimizationIgnored,
                     updateState = updateState,
                     onOpenSection = { activeSubSection = it },
+                    onToggleAutoCheckUpdates = onToggleAutoCheckUpdates,
                     onOpenSetupGuide = onOpenSetupGuide,
                     onCheckForUpdates = onCheckForUpdates,
                     onOpenUpdateDialog = onOpenUpdateDialog
@@ -185,7 +196,8 @@ fun SettingsScreen(
                     onSelectMadhab = onSelectMadhab,
                     onSelectHighLatitudeRule = onSelectHighLatitudeRule,
                     onToggleIshaMidnight = onToggleIshaMidnight,
-                    onSelectCity = onSelectCity
+                    onSelectCity = onSelectCity,
+                    onUpdateHijriOffset = onUpdateHijriOffset
                 )
             }
             SettingsSubSection.ALERTS -> {
@@ -229,6 +241,7 @@ private fun MainSettingsMenu(
     isBatteryOptimizationIgnored: Boolean,
     updateState: UpdateUiState,
     onOpenSection: (SettingsSubSection) -> Unit,
+    onToggleAutoCheckUpdates: (Boolean) -> Unit,
     onOpenSetupGuide: () -> Unit,
     onCheckForUpdates: () -> Unit,
     onOpenUpdateDialog: () -> Unit
@@ -572,6 +585,53 @@ private fun MainSettingsMenu(
             }
         }
 
+        Spacer(modifier = Modifier.height(10.dp))
+
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(18.dp),
+            color = MaterialTheme.colorScheme.surfaceContainer,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.30f))
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Auto-Check Updates on Launch",
+                        style = MaterialTheme.typography.titleSmall.copy(
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    )
+                    Text(
+                        text = if (userPreferences.autoCheckUpdatesEnabled) {
+                            "Checks GitHub Releases every 6h; disable for strict zero-network mode"
+                        } else {
+                            "Strict offline mode — checks only when you tap App Updates"
+                        },
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    )
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+                Switch(
+                    checked = userPreferences.autoCheckUpdatesEnabled,
+                    onCheckedChange = onToggleAutoCheckUpdates,
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
+                        checkedTrackColor = MaterialTheme.colorScheme.primary,
+                        uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant
+                    )
+                )
+            }
+        }
+
         Spacer(modifier = Modifier.height(24.dp))
     }
 }
@@ -859,7 +919,8 @@ private fun CalculationSubScreen(
     onSelectMadhab: (MadhabOption) -> Unit,
     onSelectHighLatitudeRule: (HighLatitudeRuleOption) -> Unit,
     onToggleIshaMidnight: (Boolean) -> Unit,
-    onSelectCity: (CityPreset) -> Unit
+    onSelectCity: (CityPreset) -> Unit,
+    onUpdateHijriOffset: (Int) -> Unit
 ) {
     var showCityPicker by remember { mutableStateOf(false) }
 
@@ -1103,6 +1164,62 @@ private fun CalculationSubScreen(
                         uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant
                     )
                 )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(14.dp))
+
+        SettingsGroupCard(title = "Hijri Moonsighting Offset") {
+            val today = remember {
+                Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
+            }
+            val previewDate = remember(today, userPreferences.hijriDayOffsetDays) {
+                IslamicCalendarHelper.resolveIslamicDate(today, userPreferences.hijriDayOffsetDays)
+            }
+            Text(
+                text = "Adjust Hijri date (-2 to +2 days) to match Pakistan Ruet-e-Hilal or local moonsighting.",
+                style = MaterialTheme.typography.bodySmall.copy(
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = "Current: ${previewDate.formattedHijriDate}",
+                style = MaterialTheme.typography.labelLarge.copy(
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            )
+            Spacer(modifier = Modifier.height(10.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                listOf(-2, -1, 0, 1, 2).forEach { offset ->
+                    val isSelected = userPreferences.hijriDayOffsetDays == offset
+                    val label = if (offset > 0) "+${offset}d" else if (offset == 0) "0d" else "${offset}d"
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(
+                                if (isSelected) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
+                            )
+                            .clickable { onUpdateHijriOffset(offset) }
+                            .padding(vertical = 12.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = label,
+                            style = TabularClockStyle.copy(
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+                            )
+                        )
+                    }
+                }
             }
         }
     }
@@ -1463,19 +1580,30 @@ private fun AlertsSubScreen(
 
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(2.dp)
                     ) {
                         Box(
                             modifier = Modifier
-                                .size(34.dp)
+                                .size(48.dp)
                                 .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.surfaceVariant)
                                 .clickable {
                                     if (currentOffset > -30) onUpdateOffset(prayer, currentOffset - 1)
+                                }
+                                .semantics {
+                                    role = Role.Button
+                                    contentDescription = "Decrease ${friendlyPrayerName(prayer)} offset"
                                 },
                             contentAlignment = Alignment.Center
                         ) {
-                            Text("−", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                            Box(
+                                modifier = Modifier
+                                    .size(34.dp)
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text("−", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                            }
                         }
 
                         Text(
@@ -1491,15 +1619,26 @@ private fun AlertsSubScreen(
 
                         Box(
                             modifier = Modifier
-                                .size(34.dp)
+                                .size(48.dp)
                                 .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.primaryContainer)
                                 .clickable {
                                     if (currentOffset < 30) onUpdateOffset(prayer, currentOffset + 1)
+                                }
+                                .semantics {
+                                    role = Role.Button
+                                    contentDescription = "Increase ${friendlyPrayerName(prayer)} offset"
                                 },
                             contentAlignment = Alignment.Center
                         ) {
-                            Text("+", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                            Box(
+                                modifier = Modifier
+                                    .size(34.dp)
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.primaryContainer),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text("+", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                            }
                         }
                     }
                 }

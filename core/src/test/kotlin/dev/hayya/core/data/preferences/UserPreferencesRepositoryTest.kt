@@ -405,4 +405,23 @@ class UserPreferencesRepositoryTest {
         assertThat(updated.tasbihMode).isEqualTo(TasbihTargetMode.TARGET_33)
         assertThat(updated.salawatCount).isEqualTo(10)
     }
+
+    @Test
+    fun atomicCounters_hijriOffset_andAutoUpdateToggle_persistSafely() = runTest {
+        assertThat(repository.incrementTasbihCount()).isEqualTo(1)
+        assertThat(repository.incrementTasbihCount()).isEqualTo(2)
+        assertThat(repository.incrementSalawatCount()).isEqualTo(1)
+
+        repository.updateHijriDayOffsetDays(-5) // clamped to -2
+        assertThat(repository.userPreferencesFlow.first().hijriDayOffsetDays).isEqualTo(-2)
+        repository.updateHijriDayOffsetDays(4) // clamped to +2
+        assertThat(repository.userPreferencesFlow.first().hijriDayOffsetDays).isEqualTo(2)
+
+        assertThat(repository.userPreferencesFlow.first().autoCheckUpdatesEnabled).isTrue()
+        repository.updateAutoCheckUpdatesEnabled(false)
+        val prefs = repository.userPreferencesFlow.first()
+        assertThat(prefs.autoCheckUpdatesEnabled).isFalse()
+        assertThat(prefs.tasbihCount).isEqualTo(2)
+        assertThat(prefs.salawatCount).isEqualTo(1)
+    }
 }

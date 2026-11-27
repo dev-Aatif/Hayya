@@ -16,20 +16,6 @@ import kotlinx.coroutines.launch
  */
 class CompactPrayerWidgetReceiver : GlanceAppWidgetReceiver() {
     override val glanceAppWidget: GlanceAppWidget = CompactPrayerWidget()
-
-    override fun onReceive(context: Context, intent: Intent) {
-        super.onReceive(context, intent)
-        if (intent.action == PrayerWidgetUpdater.ACTION_PRAYER_DATA_CHANGED) {
-            val pendingResult = goAsync()
-            CoroutineScope(Dispatchers.Default + SupervisorJob()).launch {
-                try {
-                    PrayerWidgetUpdater.updateAllWidgets(context)
-                } finally {
-                    pendingResult?.finish()
-                }
-            }
-        }
-    }
 }
 
 /**
@@ -37,20 +23,6 @@ class CompactPrayerWidgetReceiver : GlanceAppWidgetReceiver() {
  */
 class FullTimetableWidgetReceiver : GlanceAppWidgetReceiver() {
     override val glanceAppWidget: GlanceAppWidget = FullTimetableWidget()
-
-    override fun onReceive(context: Context, intent: Intent) {
-        super.onReceive(context, intent)
-        if (intent.action == PrayerWidgetUpdater.ACTION_PRAYER_DATA_CHANGED) {
-            val pendingResult = goAsync()
-            CoroutineScope(Dispatchers.Default + SupervisorJob()).launch {
-                try {
-                    PrayerWidgetUpdater.updateAllWidgets(context)
-                } finally {
-                    pendingResult?.finish()
-                }
-            }
-        }
-    }
 }
 
 /**
@@ -58,20 +30,6 @@ class FullTimetableWidgetReceiver : GlanceAppWidgetReceiver() {
  */
 class DailyPrayersWidgetReceiver : GlanceAppWidgetReceiver() {
     override val glanceAppWidget: GlanceAppWidget = DailyPrayersWidget()
-
-    override fun onReceive(context: Context, intent: Intent) {
-        super.onReceive(context, intent)
-        if (intent.action == PrayerWidgetUpdater.ACTION_PRAYER_DATA_CHANGED) {
-            val pendingResult = goAsync()
-            CoroutineScope(Dispatchers.Default + SupervisorJob()).launch {
-                try {
-                    PrayerWidgetUpdater.updateAllWidgets(context)
-                } finally {
-                    pendingResult?.finish()
-                }
-            }
-        }
-    }
 }
 
 /**
@@ -79,20 +37,6 @@ class DailyPrayersWidgetReceiver : GlanceAppWidgetReceiver() {
  */
 class NextPrayerBannerWidgetReceiver : GlanceAppWidgetReceiver() {
     override val glanceAppWidget: GlanceAppWidget = NextPrayerBannerWidget()
-
-    override fun onReceive(context: Context, intent: Intent) {
-        super.onReceive(context, intent)
-        if (intent.action == PrayerWidgetUpdater.ACTION_PRAYER_DATA_CHANGED) {
-            val pendingResult = goAsync()
-            CoroutineScope(Dispatchers.Default + SupervisorJob()).launch {
-                try {
-                    PrayerWidgetUpdater.updateAllWidgets(context)
-                } finally {
-                    pendingResult?.finish()
-                }
-            }
-        }
-    }
 }
 
 /**
@@ -100,20 +44,6 @@ class NextPrayerBannerWidgetReceiver : GlanceAppWidgetReceiver() {
  */
 class FastingAndNightWidgetReceiver : GlanceAppWidgetReceiver() {
     override val glanceAppWidget: GlanceAppWidget = FastingAndNightWidget()
-
-    override fun onReceive(context: Context, intent: Intent) {
-        super.onReceive(context, intent)
-        if (intent.action == PrayerWidgetUpdater.ACTION_PRAYER_DATA_CHANGED) {
-            val pendingResult = goAsync()
-            CoroutineScope(Dispatchers.Default + SupervisorJob()).launch {
-                try {
-                    PrayerWidgetUpdater.updateAllWidgets(context)
-                } finally {
-                    pendingResult?.finish()
-                }
-            }
-        }
-    }
 }
 
 /**

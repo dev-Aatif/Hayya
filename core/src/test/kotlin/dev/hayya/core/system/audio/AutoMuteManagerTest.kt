@@ -171,6 +171,32 @@ class AutoMuteManagerTest {
     }
 
     @Test
+    fun restoreRingerMode_whenSecurityExceptionThrown_preservesSavedStateAndReturnsFalse() = runTest {
+        val saved = SavedRingerState(
+            ringerMode = AudioManager.RINGER_MODE_NORMAL,
+            ringVolume = 8,
+            notificationVolume = 6,
+            isAutoMuted = true,
+            endEpochMillis = System.currentTimeMillis() - 60_000L
+        )
+        every { repository.savedRingerStateFlow } returns flowOf(saved)
+        every { audioManager.ringerMode = AudioManager.RINGER_MODE_NORMAL } throws SecurityException("DND access revoked")
+
+        val result = AutoMuteManager.restoreRingerMode(context, repository)
+
+        assertThat(result).isFalse()
+        verify(exactly = 0) {
+            notificationManager.cancel(AutoMuteManager.NOTIFICATION_ID)
+        }
+        verify(exactly = 1) {
+            notificationManager.notify(AutoMuteManager.RESTORE_FAILED_NOTIFICATION_ID, any())
+        }
+        coVerify(exactly = 0) {
+            repository.clearAutoMuteState()
+        }
+    }
+
+    @Test
     fun activateAutoMute_withFridayJumuah_activatesCorrectlyAndPostsFridayNotification() = runTest {
         every { audioManager.ringerMode } returns AudioManager.RINGER_MODE_NORMAL
         every { audioManager.getStreamVolume(AudioManager.STREAM_RING) } returns 6

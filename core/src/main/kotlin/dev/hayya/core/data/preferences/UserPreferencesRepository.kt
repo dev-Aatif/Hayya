@@ -67,6 +67,8 @@ object PreferenceKeys {
     val TASBIH_COUNT = intPreferencesKey("pref_tasbih_count")
     val TASBIH_MODE = stringPreferencesKey("pref_tasbih_mode")
     val SALAWAT_COUNT = intPreferencesKey("pref_salawat_count")
+    val HIJRI_DAY_OFFSET_DAYS = intPreferencesKey("pref_hijri_day_offset_days")
+    val AUTO_CHECK_UPDATES_ENABLED = booleanPreferencesKey("pref_auto_check_updates_enabled")
     val LAST_UPDATE_CHECK_EPOCH_MILLIS = longPreferencesKey("pref_last_update_check_epoch_millis")
     val LAST_NOTIFIED_UPDATE_VERSION = stringPreferencesKey("pref_last_notified_update_version")
 
@@ -392,6 +394,19 @@ class UserPreferencesRepository(
     }
 
     /**
+     * Atomically increments the Tasbih counter inside DataStore.
+     */
+    suspend fun incrementTasbihCount(): Int {
+        var updated = 0
+        dataStore.edit { preferences ->
+            val current = (preferences[PreferenceKeys.TASBIH_COUNT] ?: 0).coerceAtLeast(0)
+            updated = current + 1
+            preferences[PreferenceKeys.TASBIH_COUNT] = updated
+        }
+        return updated
+    }
+
+    /**
      * Persists the Tasbih counter value.
      */
     suspend fun updateTasbihCount(count: Int) {
@@ -410,11 +425,42 @@ class UserPreferencesRepository(
     }
 
     /**
+     * Atomically increments the Friday Salawat counter inside DataStore.
+     */
+    suspend fun incrementSalawatCount(): Int {
+        var updated = 0
+        dataStore.edit { preferences ->
+            val current = (preferences[PreferenceKeys.SALAWAT_COUNT] ?: 0).coerceAtLeast(0)
+            updated = current + 1
+            preferences[PreferenceKeys.SALAWAT_COUNT] = updated
+        }
+        return updated
+    }
+
+    /**
      * Persists the Friday Salawat counter value.
      */
     suspend fun updateSalawatCount(count: Int) {
         dataStore.edit { preferences ->
             preferences[PreferenceKeys.SALAWAT_COUNT] = count.coerceAtLeast(0)
+        }
+    }
+
+    /**
+     * Persists regional Hijri moonsighting offset in days (`-2..+2`).
+     */
+    suspend fun updateHijriDayOffsetDays(offsetDays: Int) {
+        dataStore.edit { preferences ->
+            preferences[PreferenceKeys.HIJRI_DAY_OFFSET_DAYS] = offsetDays.coerceIn(-2, 2)
+        }
+    }
+
+    /**
+     * Persists whether automatic update checks run on app launch.
+     */
+    suspend fun updateAutoCheckUpdatesEnabled(enabled: Boolean) {
+        dataStore.edit { preferences ->
+            preferences[PreferenceKeys.AUTO_CHECK_UPDATES_ENABLED] = enabled
         }
     }
 
@@ -526,6 +572,8 @@ class UserPreferencesRepository(
             runCatching { TasbihTargetMode.valueOf(name) }.getOrNull()
         } ?: TasbihTargetMode.FATIMA_100
         val salawatCount = (preferences[PreferenceKeys.SALAWAT_COUNT] ?: 0).coerceAtLeast(0)
+        val hijriDayOffsetDays = (preferences[PreferenceKeys.HIJRI_DAY_OFFSET_DAYS] ?: 0).coerceIn(-2, 2)
+        val autoCheckUpdatesEnabled = preferences[PreferenceKeys.AUTO_CHECK_UPDATES_ENABLED] ?: true
         val lastUpdateCheckEpochMillis = preferences[PreferenceKeys.LAST_UPDATE_CHECK_EPOCH_MILLIS] ?: 0L
         val lastNotifiedUpdateVersion = preferences[PreferenceKeys.LAST_NOTIFIED_UPDATE_VERSION]
 
@@ -555,6 +603,8 @@ class UserPreferencesRepository(
             tasbihCount = tasbihCount,
             tasbihMode = tasbihMode,
             salawatCount = salawatCount,
+            hijriDayOffsetDays = hijriDayOffsetDays,
+            autoCheckUpdatesEnabled = autoCheckUpdatesEnabled,
             lastUpdateCheckEpochMillis = lastUpdateCheckEpochMillis,
             lastNotifiedUpdateVersion = lastNotifiedUpdateVersion
         )

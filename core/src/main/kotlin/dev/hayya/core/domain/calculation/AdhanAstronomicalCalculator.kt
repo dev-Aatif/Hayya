@@ -9,7 +9,9 @@ import kotlinx.datetime.LocalDate
 /**
  * Astronomical calculator implementation wrapping Batoul Apps adhan-kotlin library.
  */
-class AdhanAstronomicalCalculator : AstronomicalCalculator {
+class AdhanAstronomicalCalculator(
+    private val solarFallback: SolarAstronomicalCalculator = SolarAstronomicalCalculator()
+) : AstronomicalCalculator {
 
     override fun calculatePrayerTimes(
         coordinates: Coordinates,
@@ -23,13 +25,24 @@ class AdhanAstronomicalCalculator : AstronomicalCalculator {
         )
         val prayerTimes = PrayerTimes(coordinates, dateComponents, parameters)
 
+        val fajr = prayerTimes.fajr?.time
+        val sunrise = prayerTimes.sunrise?.time
+        val dhuhr = prayerTimes.dhuhr?.time
+        val asr = prayerTimes.asr?.time
+        val maghrib = prayerTimes.maghrib?.time
+        val isha = prayerTimes.isha?.time
+
+        val fallback by lazy(LazyThreadSafetyMode.NONE) {
+            solarFallback.calculatePrayerTimes(coordinates, date, parameters)
+        }
+
         return RawPrayerTimes(
-            fajrEpochMillis = prayerTimes.fajr?.time ?: 0L,
-            sunriseEpochMillis = prayerTimes.sunrise?.time ?: 0L,
-            dhuhrEpochMillis = prayerTimes.dhuhr?.time ?: 0L,
-            asrEpochMillis = prayerTimes.asr?.time ?: 0L,
-            maghribEpochMillis = prayerTimes.maghrib?.time ?: 0L,
-            ishaEpochMillis = prayerTimes.isha?.time ?: 0L
+            fajrEpochMillis = fajr ?: fallback.fajrEpochMillis,
+            sunriseEpochMillis = sunrise ?: fallback.sunriseEpochMillis,
+            dhuhrEpochMillis = dhuhr ?: fallback.dhuhrEpochMillis,
+            asrEpochMillis = asr ?: fallback.asrEpochMillis,
+            maghribEpochMillis = maghrib ?: fallback.maghribEpochMillis,
+            ishaEpochMillis = isha ?: fallback.ishaEpochMillis
         )
     }
 }

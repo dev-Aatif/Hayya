@@ -154,7 +154,6 @@ class MainActivity : ComponentActivity() {
 
         lifecycleScope.launch {
             app.alarmScheduler.scheduleRollingAlarms()
-            PrayerWidgetUpdater.updateAllWidgets(this@MainActivity)
         }
 
         // Initialize ViewModel immediately so DataStore begins emitting before first draw
@@ -174,7 +173,7 @@ class MainActivity : ComponentActivity() {
         )
 
         setContent {
-            val state by viewModel.uiState.collectAsStateWithLifecycle()
+            val state by viewModel.staticUiState.collectAsStateWithLifecycle()
             val hadithState by hadithViewModel.uiState.collectAsStateWithLifecycle()
             val themeMode = state.userPreferences.themeMode
             val dynamicColor = state.userPreferences.dynamicColorEnabled
@@ -224,6 +223,7 @@ class MainActivity : ComponentActivity() {
                         state.userPreferences.highLatitudeRule,
                         state.userPreferences.ishaExpiresAtMidnight,
                         state.userPreferences.manualMinuteOffsets,
+                        state.userPreferences.hijriDayOffsetDays,
                         state.userPreferences.themeMode,
                         state.todayPrayerLog
                     ) {
@@ -325,7 +325,8 @@ class MainActivity : ComponentActivity() {
                                     onCycleFastStatus = { date -> viewModel.cycleFastStatus(date) },
                                     onUpdateQadhaMadeUp = { viewModel.updateQadhaMadeUp(it) },
                                     onUpdateSuhoorAlarm = { enabled, mins -> viewModel.updateSuhoorAlarm(enabled, mins) },
-                                    onUpdateIftarAlert = { viewModel.updateIftarAlert(it) }
+                                    onUpdateIftarAlert = { viewModel.updateIftarAlert(it) },
+                                    countdownStateFlow = viewModel.countdownState
                                 )
                             }
 
@@ -361,7 +362,8 @@ class MainActivity : ComponentActivity() {
                                 TahajjudScreen(
                                     state = state,
                                     onBackClick = { viewModel.setTahajjudOpen(false) },
-                                    onToggleTahajjudAlarm = { viewModel.toggleTahajjudAlarm(it) }
+                                    onToggleTahajjudAlarm = { viewModel.toggleTahajjudAlarm(it) },
+                                    countdownStateFlow = viewModel.countdownState
                                 )
                             }
 
@@ -414,7 +416,8 @@ class MainActivity : ComponentActivity() {
                                                         onOpenTahajjud = { viewModel.setTahajjudOpen(true) },
                                                         onOpenFridayGuide = { viewModel.setFridayGuideOpen(true) },
                                                         onSelectCity = { viewModel.selectCity(it) },
-                                                        onOpenUpdateDialog = { viewModel.openUpdateDialog() }
+                                                        onOpenUpdateDialog = { viewModel.openUpdateDialog() },
+                                                        countdownStateFlow = viewModel.countdownState
                                                     )
                                                 }
 
@@ -494,6 +497,8 @@ class MainActivity : ComponentActivity() {
                                                             viewModel.scheduleTestAlarm(delaySeconds)
                                                         },
                                                         onSelectCity = { viewModel.selectCity(it) },
+                                                        onUpdateHijriOffset = { viewModel.updateHijriDayOffsetDays(it) },
+                                                        onToggleAutoCheckUpdates = { viewModel.toggleAutoCheckUpdates(it) },
                                                         onOpenSetupGuide = { viewModel.openOnboarding() },
                                                         updateState = state.updateState,
                                                         onCheckForUpdates = { viewModel.checkForUpdates(manual = true) },
@@ -526,8 +531,10 @@ class MainActivity : ComponentActivity() {
                                 }
                             },
                             onOpenInBrowser = { url ->
-                                runCatching {
-                                    startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                                if (AppUpdateEngine.isAllowedUpdateUrl(url)) {
+                                    runCatching {
+                                        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                                    }
                                 }
                             },
                             onDismiss = { viewModel.dismissUpdateDialog() }
@@ -693,7 +700,6 @@ class MainActivity : ComponentActivity() {
         val app = application as? HayyaApplication ?: HayyaApplication.instance
         lifecycleScope.launch {
             app.alarmScheduler.scheduleRollingAlarms()
-            PrayerWidgetUpdater.updateAllWidgets(this@MainActivity)
         }
     }
 

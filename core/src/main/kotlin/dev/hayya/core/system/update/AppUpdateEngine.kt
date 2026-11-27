@@ -28,8 +28,10 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
 import java.net.HttpURLConnection
+import java.net.URI
 import java.net.URL
 import java.security.MessageDigest
+import java.util.Locale
 
 /**
  * Abstraction for network calls performed by [AppUpdateEngine], enabling deterministic unit testing.
@@ -58,7 +60,26 @@ class HttpUrlConnectionUpdateTransport(
                 if (code !in 200..299) {
                     throw IllegalStateException("HTTP $code while checking updates")
                 }
-                connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+                val contentLength = connection.contentLengthLong
+                if (contentLength > MAX_TEXT_RESPONSE_BYTES) {
+                    throw IllegalStateException("Response exceeds maximum allowed size ($contentLength bytes)")
+                }
+                val out = java.io.ByteArrayOutputStream()
+                val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+                var total = 0L
+                connection.inputStream.use { input ->
+                    while (true) {
+                        currentCoroutineContext().ensureActive()
+                        val read = input.read(buffer)
+                        if (read == -1) break
+                        total += read
+                        if (total > MAX_TEXT_RESPONSE_BYTES) {
+                            throw IllegalStateException("Response exceeds $MAX_TEXT_RESPONSE_BYTES bytes limit")
+                        }
+                        out.write(buffer, 0, read)
+                    }
+                }
+                out.toString(Charsets.UTF_8.name())
             } finally {
                 connection.disconnect()
             }
@@ -143,8 +164,8 @@ class HttpUrlConnectionUpdateTransport(
         var currentUrl = initialUrl
         var redirects = 0
         while (true) {
-            require(currentUrl.startsWith("https://", ignoreCase = true)) {
-                "Refusing non-HTTPS update URL"
+            require(AppUpdateEngine.isAllowedUpdateUrl(currentUrl)) {
+                "Refusing non-HTTPS or untrusted update host"
             }
             val conn = (URL(currentUrl).openConnection() as HttpURLConnection).apply {
                 instanceFollowRedirects = false
@@ -175,6 +196,7 @@ class HttpUrlConnectionUpdateTransport(
         const val CONNECT_TIMEOUT_MS = 10_000
         const val READ_TIMEOUT_MS = 20_000
         const val MAX_REDIRECTS = 5
+        const val MAX_TEXT_RESPONSE_BYTES = 32L * 1024L * 1024L
     }
 }
 
@@ -200,6 +222,9 @@ class AppUpdateEngine(
     suspend fun checkForUpdate(currentVersion: String? = null): UpdateCheckResult {
         val resolvedCurrentVersion = currentVersion ?: currentVersionProvider()
         val apiUrl = "https://api.github.com/repos/$repoOwner/$repoName/releases/latest"
+        if (!isAllowedUpdateUrl(apiUrl)) {
+            return UpdateCheckResult.Failure("Refusing untrusted release endpoint")
+        }
         val jsonResult = httpTransport.getText(apiUrl)
         val payload = jsonResult.getOrElse { error ->
             return UpdateCheckResult.Failure(error.message ?: "Unable to reach GitHub Releases")
@@ -220,8 +245,11 @@ class AppUpdateEngine(
         onProgress: (Int) -> Unit
     ): Result<File> {
         val downloadUrl = release.apkDownloadUrl
-            ?.takeIf { it.startsWith("https://", ignoreCase = true) }
-            ?: return Result.failure(IllegalStateException("Release does not contain a valid HTTPS APK download"))
+            ?.takeIf { isAllowedUpdateUrl(it) }
+            ?: return Result.failure(IllegalStateException("Release does not contain a trusted HTTPS APK download"))
+        val shaUrl = release.sha256AssetUrl
+            ?.takeIf { isAllowedUpdateUrl(it) }
+            ?: return Result.failure(IllegalStateException("Release is missing a trusted HTTPS SHA-256 checksum asset"))
 
         val updatesDir = File(context.cacheDir, UPDATES_CACHE_DIR).apply {
             if (!exists()) mkdirs()
@@ -240,24 +268,21 @@ class AppUpdateEngine(
             return Result.failure(downloadResult.exceptionOrNull() ?: IllegalStateException("Download failed"))
         }
 
-        val shaUrl = release.sha256AssetUrl?.takeIf { it.startsWith("https://", ignoreCase = true) }
-        if (shaUrl != null) {
-            val shaText = httpTransport.getText(shaUrl).getOrElse { error ->
-                targetFile.delete()
-                return Result.failure(
-                    IllegalStateException("Unable to verify APK integrity (SHA-256 fetch failed): ${error.message ?: "network error"}")
-                )
-            }
-            val expectedHex = GitHubReleaseParser.parseSha256Hex(shaText)
-            if (expectedHex == null) {
-                targetFile.delete()
-                return Result.failure(IllegalStateException("Release SHA-256 checksum file is invalid"))
-            }
-            val actualHex = withContext(Dispatchers.IO) { computeFileSha256(targetFile) }
-            if (!actualHex.equals(expectedHex, ignoreCase = true)) {
-                targetFile.delete()
-                return Result.failure(IllegalStateException("APK integrity check (SHA-256) failed"))
-            }
+        val shaText = httpTransport.getText(shaUrl).getOrElse { error ->
+            targetFile.delete()
+            return Result.failure(
+                IllegalStateException("Unable to verify APK integrity (SHA-256 fetch failed): ${error.message ?: "network error"}")
+            )
+        }
+        val expectedHex = GitHubReleaseParser.parseSha256Hex(shaText)
+        if (expectedHex == null) {
+            targetFile.delete()
+            return Result.failure(IllegalStateException("Release SHA-256 checksum file is invalid"))
+        }
+        val actualHex = withContext(Dispatchers.IO) { computeFileSha256(targetFile) }
+        if (!actualHex.equals(expectedHex, ignoreCase = true)) {
+            targetFile.delete()
+            return Result.failure(IllegalStateException("APK integrity check (SHA-256) failed"))
         }
 
         return Result.success(targetFile)
@@ -335,6 +360,22 @@ class AppUpdateEngine(
         const val AUTO_CHECK_INTERVAL_MILLIS = 6L * 60L * 60L * 1000L
         private const val UPDATES_CACHE_DIR = "updates"
         private const val APK_MIME_TYPE = "application/vnd.android.package-archive"
+        private val ALLOWED_UPDATE_HOSTS = setOf(
+            "api.github.com",
+            "github.com",
+            "objects.githubusercontent.com",
+            "release-assets.githubusercontent.com",
+            "github-releases.githubusercontent.com"
+        )
+
+        fun isAllowedUpdateUrl(rawUrl: String?): Boolean {
+            if (rawUrl.isNullOrBlank()) return false
+            val uri = runCatching { URI(rawUrl.trim()) }.getOrNull() ?: return false
+            if (!uri.scheme.equals("https", ignoreCase = true)) return false
+            if (!uri.userInfo.isNullOrEmpty()) return false
+            val host = uri.host?.lowercase(Locale.US) ?: return false
+            return host in ALLOWED_UPDATE_HOSTS
+        }
 
         fun resolveInstalledVersionName(context: Context): String {
             return runCatching {

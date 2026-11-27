@@ -41,6 +41,7 @@ object AutoMuteManager {
     private const val TAG = "AutoMuteManager"
     const val CHANNEL_ID = "channel_salah_auto_mute"
     const val NOTIFICATION_ID = 88002
+    const val RESTORE_FAILED_NOTIFICATION_ID = 88003
 
     /**
      * Checks if the application has been granted Do Not Disturb (Notification Policy) access.
@@ -151,23 +152,84 @@ object AutoMuteManager {
             return false
         }
 
-        try {
+        val restoredSuccessfully = try {
             audioManager.ringerMode = savedState.ringerMode
             if (savedState.ringerMode == AudioManager.RINGER_MODE_NORMAL) {
                 audioManager.setStreamVolume(AudioManager.STREAM_RING, savedState.ringVolume, 0)
                 audioManager.setStreamVolume(AudioManager.STREAM_NOTIFICATION, savedState.notificationVolume, 0)
             }
             Log.i(TAG, "Successfully restored ringer mode: ${savedState.ringerMode}, ringVolume: ${savedState.ringVolume}")
+            true
+        } catch (se: SecurityException) {
+            Log.e(TAG, "Missing notification policy access while restoring ringer mode", se)
+            false
         } catch (e: Exception) {
             Log.e(TAG, "Failed to restore ringer mode or volumes", e)
+            false
         }
 
-        // Dismiss status notification
-        notificationManager?.cancel(NOTIFICATION_ID)
+        if (!restoredSuccessfully) {
+            // Preserve savedState in DataStore so user can recover once DND permission is restored
+            postRestoreFailedNotification(context, notificationManager)
+            return false
+        }
 
-        // Clear stored auto-mute state
+        // Dismiss status notifications
+        notificationManager?.cancel(NOTIFICATION_ID)
+        notificationManager?.cancel(RESTORE_FAILED_NOTIFICATION_ID)
+
+        // Clear stored auto-mute state only after ringer restoration succeeds
         repository.clearAutoMuteState()
         return true
+    }
+
+    private fun postRestoreFailedNotification(
+        context: Context,
+        notificationManager: NotificationManager?
+    ) {
+        if (notificationManager == null) return
+        ensureNotificationChannel(context, notificationManager)
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            return
+        }
+
+        val retryIntent = Intent(context, PrayerAlarmReceiver::class.java).apply {
+            action = PrayerAlarmScheduler.ACTION_RESTORE_RINGER_MODE
+        }
+        val retryPendingIntent = PendingIntent.getBroadcast(
+            context,
+            PrayerAlarmScheduler.NOTIFICATION_ID_AUTO_UNMUTE + 1,
+            retryIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val dndSettingsIntent = Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+        }
+        val settingsPendingIntent = PendingIntent.getActivity(
+            context,
+            RESTORE_FAILED_NOTIFICATION_ID,
+            dndSettingsIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_stat_hayya)
+            .setContentTitle("Could Not Auto-Restore Volume")
+            .setContentText("Grant Do Not Disturb access or adjust volume manually, then tap Retry.")
+            .setContentIntent(settingsPendingIntent)
+            .addAction(0, "DND Settings", settingsPendingIntent)
+            .addAction(0, "Retry Restore", retryPendingIntent)
+            .setAutoCancel(true)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_STATUS)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .build()
+
+        notificationManager.notify(RESTORE_FAILED_NOTIFICATION_ID, notification)
     }
 
     private fun postAutoMuteNotification(

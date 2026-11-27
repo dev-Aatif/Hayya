@@ -909,6 +909,61 @@ class PrayerViewModelTest {
         }
     }
 
+    @Test
+    fun checkForUpdatesOnLaunch_skipsNetworkWhenAutoCheckDisabled() = runTest(testDispatcher) {
+        repository.updateAutoCheckUpdatesEnabled(false)
+        val mockUpdateEngine = mockk<AppUpdateEngine>(relaxed = true)
+        val offlineVm = PrayerViewModel(
+            calculationEngine = calculationEngine,
+            preferencesRepository = repository,
+            alarmScheduler = alarmScheduler,
+            prayerLogRepository = prayerLogRepository,
+            updateEngine = mockUpdateEngine
+        )
+        try {
+            testDispatcher.scheduler.runCurrent()
+            offlineVm.checkForUpdatesOnLaunch()
+            testDispatcher.scheduler.runCurrent()
+
+            coVerify(exactly = 0) { mockUpdateEngine.checkForUpdate(any()) }
+        } finally {
+            offlineVm.viewModelScope.cancel()
+        }
+    }
+
+    @Test
+    fun countdownState_updatesOnTickWithoutEmittingToStaticUiState() = runTest(testDispatcher) {
+        val fakeClock = MutableClock(Instant.parse("2026-06-15T06:00:00Z").toEpochMilliseconds())
+        val scopedVm = PrayerViewModel(
+            calculationEngine = calculationEngine,
+            preferencesRepository = repository,
+            alarmScheduler = alarmScheduler,
+            clock = fakeClock
+        )
+        try {
+            testDispatcher.scheduler.runCurrent()
+            var staticEmissions = 0
+            backgroundScope.launch(testDispatcher) {
+                scopedVm.staticUiState.collect { staticEmissions++ }
+            }
+            backgroundScope.launch(testDispatcher) {
+                scopedVm.countdownState.collect { }
+            }
+            testDispatcher.scheduler.runCurrent()
+            val emissionsBeforeTicks = staticEmissions
+            val initialTick = scopedVm.countdownState.value.liveCountdownString
+
+            fakeClock.nowMillis += 3_000L
+            testDispatcher.scheduler.advanceTimeBy(3_000L)
+            testDispatcher.scheduler.runCurrent()
+
+            assertThat(scopedVm.countdownState.value.liveCountdownString).isNotEqualTo(initialTick)
+            assertThat(staticEmissions).isEqualTo(emissionsBeforeTicks)
+        } finally {
+            scopedVm.viewModelScope.cancel()
+        }
+    }
+
     private class MutableClock(var nowMillis: Long) : Clock {
         override fun now(): Instant = Instant.fromEpochMilliseconds(nowMillis)
     }

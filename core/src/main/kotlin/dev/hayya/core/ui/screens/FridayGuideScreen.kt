@@ -52,6 +52,7 @@ import androidx.compose.ui.unit.sp
 import dev.hayya.core.domain.friday.FridaySalawatReminder
 import dev.hayya.core.domain.friday.FridaySurahKahfReminder
 import dev.hayya.core.ui.components.SectionPageHeader
+import dev.hayya.core.ui.theme.ArabicScriptText
 import dev.hayya.core.ui.theme.HayyaTheme
 import dev.hayya.core.ui.theme.TabularClockStyle
 import java.text.SimpleDateFormat
@@ -387,7 +388,7 @@ fun FridayGuideScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(
+                            ArabicScriptText(
                                 text = FridaySalawatReminder.ARABIC_DUROOD,
                                 fontSize = 22.sp,
                                 fontWeight = FontWeight.Bold,

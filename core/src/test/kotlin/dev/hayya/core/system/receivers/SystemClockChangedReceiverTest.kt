@@ -48,7 +48,21 @@ class SystemClockChangedReceiverTest {
         receiver.onReceive(context, intent)
 
         verify(atLeast = 1) {
-            wakeLock.acquire(15_000L) // 15-second safety timeout
+            wakeLock.acquire(SystemClockChangedReceiver.WAKELOCK_TIMEOUT_MS)
+        }
+    }
+
+    @Test
+    fun onReceive_ignoresUnexpectedActionsWithoutAcquiringWakeLock() {
+        val intent = mockk<Intent>(relaxed = true) {
+            every { action } returns "com.example.SPOOFED_ACTION"
+        }
+
+        receiver.onReceive(context, intent)
+
+        verify(exactly = 0) {
+            powerManager.newWakeLock(any(), any())
+            wakeLock.acquire(any())
         }
     }
 }

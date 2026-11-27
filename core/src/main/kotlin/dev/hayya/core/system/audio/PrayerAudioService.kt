@@ -9,6 +9,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.media.AudioAttributes
+import android.media.AudioFocusRequest
 import android.media.AudioManager
 import android.media.MediaPlayer
 import android.media.RingtoneManager
@@ -48,6 +49,8 @@ class PrayerAudioService : Service() {
 
     private var mediaPlayer: MediaPlayer? = null
     private var wakeLock: PowerManager.WakeLock? = null
+    private var audioFocusRequest: AudioFocusRequest? = null
+    private var activeAlarmNotificationId: Int = DEFAULT_NOTIFICATION_ID
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -75,10 +78,19 @@ class PrayerAudioService : Service() {
                 val escalationSeconds = intent?.getIntExtra(EXTRA_VOLUME_ESCALATION_SECONDS, DEFAULT_ESCALATION_SECONDS)
                     ?: DEFAULT_ESCALATION_SECONDS
                 val prayerName = intent?.getStringExtra(EXTRA_PRAYER_NAME) ?: "Prayer"
-                val notificationId = intent?.getIntExtra(EXTRA_NOTIFICATION_ID, DEFAULT_NOTIFICATION_ID)
+                val subtitle = intent?.getStringExtra(EXTRA_SUBTITLE).orEmpty()
+                val showPostAdhanDua = intent?.getBooleanExtra(EXTRA_SHOW_POST_ADHAN_DUA, true) ?: true
+                val alarmNotificationId = intent?.getIntExtra(EXTRA_NOTIFICATION_ID, DEFAULT_NOTIFICATION_ID)
                     ?: DEFAULT_NOTIFICATION_ID
+                activeAlarmNotificationId = alarmNotificationId
 
-                startForegroundServiceWithNotification(notificationId, prayerName)
+                startForegroundServiceWithNotification(
+                    alarmNotificationId = alarmNotificationId,
+                    prayerName = prayerName,
+                    subtitle = subtitle,
+                    timeoutSeconds = timeoutSeconds,
+                    showPostAdhanDua = showPostAdhanDua
+                )
                 startPlayback(soundUriString, timeoutSeconds, escalationSeconds)
             }
             ACTION_MUTE -> {
@@ -111,10 +123,37 @@ class PrayerAudioService : Service() {
         }
 
         try {
+            val audioManager = getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+            val inActiveCall = audioManager != null && shouldSuppressLoudAdhanForCall(audioManager.mode)
+
             val audioAttributes = AudioAttributes.Builder()
                 .setUsage(AudioAttributes.USAGE_ALARM)
                 .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
                 .build()
+
+            if (!inActiveCall && audioManager != null) {
+                val focusRequest = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
+                    .setAudioAttributes(audioAttributes)
+                    .setOnAudioFocusChangeListener { focusChange ->
+                        if (focusChange == AudioManager.AUDIOFOCUS_LOSS ||
+                            focusChange == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT
+                        ) {
+                            mutePlayback()
+                        }
+                    }
+                    .build()
+                audioFocusRequest = focusRequest
+                audioManager.requestAudioFocus(focusRequest)
+            }
+
+            if (inActiveCall) {
+                Log.i(TAG, "Suppressing loud Adhan playback during active call (mode=${audioManager?.mode})")
+                // Keep service/wake UI alive until auto-silence timeout or user dismiss without blasting into active call
+                if (timeoutSeconds > 0) {
+                    scheduleFadeOut(timeoutSeconds)
+                }
+                return
+            }
 
             mediaPlayer = MediaPlayer().apply {
                 setAudioAttributes(audioAttributes)
@@ -236,6 +275,14 @@ class PrayerAudioService : Service() {
         } finally {
             mediaPlayer = null
         }
+
+        audioFocusRequest?.let { request ->
+            runCatching {
+                val audioManager = getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+                audioManager?.abandonAudioFocusRequest(request)
+            }
+            audioFocusRequest = null
+        }
     }
 
     private fun stopPlaybackAndSelf() {
@@ -247,6 +294,7 @@ class PrayerAudioService : Service() {
 
         val finishedBroadcast = Intent(ACTION_PLAYBACK_FINISHED).apply {
             setPackage(packageName)
+            putExtra(EXTRA_NOTIFICATION_ID, activeAlarmNotificationId)
         }
         sendBroadcast(finishedBroadcast)
 
@@ -254,28 +302,46 @@ class PrayerAudioService : Service() {
         stopSelf()
     }
 
-    private fun startForegroundServiceWithNotification(notificationId: Int, prayerName: String) {
-        val notification = buildForegroundNotification(notificationId, prayerName)
+    private fun startForegroundServiceWithNotification(
+        alarmNotificationId: Int,
+        prayerName: String,
+        subtitle: String,
+        timeoutSeconds: Int,
+        showPostAdhanDua: Boolean
+    ) {
+        val notification = buildForegroundNotification(
+            alarmNotificationId = alarmNotificationId,
+            prayerName = prayerName,
+            subtitle = subtitle,
+            timeoutSeconds = timeoutSeconds,
+            showPostAdhanDua = showPostAdhanDua
+        )
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             ServiceCompat.startForeground(
                 this,
-                notificationId,
+                FOREGROUND_NOTIFICATION_ID,
                 notification,
                 ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
             )
         } else {
-            startForeground(notificationId, notification)
+            startForeground(FOREGROUND_NOTIFICATION_ID, notification)
         }
     }
 
-    private fun buildForegroundNotification(notificationId: Int, prayerName: String): Notification {
+    private fun buildForegroundNotification(
+        alarmNotificationId: Int,
+        prayerName: String,
+        subtitle: String,
+        timeoutSeconds: Int,
+        showPostAdhanDua: Boolean
+    ): Notification {
         val stopIntent = Intent(this, PrayerAudioService::class.java).apply {
             action = ACTION_STOP
         }
         val stopPendingIntent = PendingIntent.getService(
             this,
-            notificationId + 1,
+            FOREGROUND_NOTIFICATION_ID + 1,
             stopIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
@@ -285,19 +351,25 @@ class PrayerAudioService : Service() {
         }
         val mutePendingIntent = PendingIntent.getService(
             this,
-            notificationId + 2,
+            FOREGROUND_NOTIFICATION_ID + 2,
             muteIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
         val fullScreenIntent = Intent(this, PrayerWakeActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            putExtra(PrayerWakeActivity.EXTRA_NOTIFICATION_ID, notificationId)
+            putExtra(PrayerWakeActivity.EXTRA_NOTIFICATION_ID, alarmNotificationId)
             putExtra(PrayerWakeActivity.EXTRA_PRAYER_TYPE, prayerName)
+            if (subtitle.isNotBlank()) {
+                putExtra(PrayerWakeActivity.EXTRA_SUBTITLE, subtitle)
+            }
+            putExtra(PrayerWakeActivity.EXTRA_AUTO_SILENCE_SECONDS, timeoutSeconds)
+            putExtra(PrayerWakeActivity.EXTRA_SHOW_POST_ADHAN_DUA, showPostAdhanDua)
         }
+        // Use a dedicated service requestCode so we never overwrite PrayerAlarmReceiver's PendingIntent extras
         val fullScreenPendingIntent = PendingIntent.getActivity(
             this,
-            notificationId,
+            FOREGROUND_NOTIFICATION_ID + 3,
             fullScreenIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
@@ -317,12 +389,12 @@ class PrayerAudioService : Service() {
             .setSmallIcon(R.drawable.ic_stat_hayya)
             .setContentTitle(title)
             .setContentText(text)
-            .setPriority(NotificationCompat.PRIORITY_MAX)
-            .setCategory(NotificationCompat.CATEGORY_ALARM)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setOngoing(true)
             .setAutoCancel(false)
-            .setFullScreenIntent(fullScreenPendingIntent, true)
+            .setContentIntent(fullScreenPendingIntent)
             .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Stop", stopPendingIntent)
             .addAction(android.R.drawable.ic_lock_silent_mode, "Mute", mutePendingIntent)
             .build()
@@ -365,10 +437,18 @@ class PrayerAudioService : Service() {
         const val EXTRA_TIMEOUT_SECONDS = "extra_timeout_seconds"
         const val EXTRA_VOLUME_ESCALATION_SECONDS = "extra_volume_escalation_seconds"
         const val EXTRA_PRAYER_NAME = "extra_prayer_name"
+        const val EXTRA_SUBTITLE = "extra_subtitle"
+        const val EXTRA_SHOW_POST_ADHAN_DUA = "extra_show_post_adhan_dua"
         const val EXTRA_NOTIFICATION_ID = "extra_notification_id"
 
         const val DEFAULT_TIMEOUT_SECONDS = 60
         const val DEFAULT_ESCALATION_SECONDS = 0
         const val DEFAULT_NOTIFICATION_ID = 99999
+        const val FOREGROUND_NOTIFICATION_ID = 99998
+
+        fun shouldSuppressLoudAdhanForCall(audioMode: Int): Boolean {
+            return audioMode == AudioManager.MODE_IN_CALL ||
+                audioMode == AudioManager.MODE_IN_COMMUNICATION
+        }
     }
 }

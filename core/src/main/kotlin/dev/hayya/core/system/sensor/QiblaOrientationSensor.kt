@@ -1,6 +1,7 @@
 package dev.hayya.core.system.sensor
 
 import android.content.Context
+import android.hardware.GeomagneticField
 import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
@@ -42,8 +43,24 @@ class QiblaOrientationSensor(
 
     private var filteredAzimuth = 0f
     private var isFirstReading = true
+    private var magneticDeclinationDegrees = 0f
 
     private var onOrientationChanged: ((azimuth: Float, accuracy: Int) -> Unit)? = null
+
+    /**
+     * Configures local magnetic declination so azimuth readings align with geographic True North
+     * matching [QiblaCalculator.calculateBearing].
+     */
+    fun setTrueNorthDeclination(latitude: Double, longitude: Double, altitudeMeters: Double = 0.0) {
+        magneticDeclinationDegrees = runCatching {
+            GeomagneticField(
+                latitude.toFloat(),
+                longitude.toFloat(),
+                altitudeMeters.toFloat(),
+                System.currentTimeMillis()
+            ).declination
+        }.getOrDefault(0f)
+    }
 
     /**
      * Checks whether the host device possesses the required hardware sensors to calculate orientation.
@@ -109,12 +126,13 @@ class QiblaOrientationSensor(
             }
         }
 
-        rawAzimuth?.let { azimuth ->
+        rawAzimuth?.let { magneticAzimuth ->
+            val trueAzimuth = ((magneticAzimuth + magneticDeclinationDegrees) % 360f + 360f) % 360f
             filteredAzimuth = if (isFirstReading) {
                 isFirstReading = false
-                azimuth
+                trueAzimuth
             } else {
-                QiblaCalculator.smoothAngle(filteredAzimuth, azimuth, smoothingAlpha)
+                QiblaCalculator.smoothAngle(filteredAzimuth, trueAzimuth, smoothingAlpha)
             }
             onOrientationChanged?.invoke(filteredAzimuth, event.accuracy)
         }

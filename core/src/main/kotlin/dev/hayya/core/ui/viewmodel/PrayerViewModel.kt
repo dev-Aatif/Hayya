@@ -46,6 +46,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flatMapLatest
@@ -54,10 +55,12 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.datetime.Clock
+import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.Instant
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
+import kotlinx.datetime.minus
 import kotlinx.datetime.toLocalDateTime
 import java.time.chrono.HijrahDate
 import java.time.format.DateTimeFormatter
@@ -145,6 +148,18 @@ data class PrayerDashboardUiState(
 )
 
 /**
+ * Isolated 1-second ticker slice so countdown updates only recompose timer views
+ * rather than re-evaluating the root Activity navigation shell every second.
+ */
+data class PrayerCountdownUiState(
+    val liveCountdownString: String = "00:00:00",
+    val fastingCountdown: String = "00:00:00",
+    val isFastingCountdownToIftar: Boolean = true,
+    val tahajjudCountdown: String = "00:00:00",
+    val isTahajjudActiveNow: Boolean = false
+)
+
+/**
  * ViewModel orchestrating live prayer time calculations, 1-second countdown tickers,
  * and user preference updates with automated alarm rescheduling.
  */
@@ -158,19 +173,30 @@ class PrayerViewModel(
     private val updateEngine: AppUpdateEngine? = null
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(
-        PrayerDashboardUiState(
-            updateState = UpdateUiState(
-                currentVersionName = updateEngine?.currentVersionName() ?: "1.0.0"
-            )
+    private val initialSnapshot = PrayerDashboardUiState(
+        updateState = UpdateUiState(
+            currentVersionName = updateEngine?.currentVersionName() ?: "1.0.0"
         )
     )
+    private val _uiState = MutableStateFlow(initialSnapshot)
     val uiState: StateFlow<PrayerDashboardUiState> = _uiState.asStateFlow()
+
+    private val _staticUiState = MutableStateFlow(initialSnapshot)
+    val staticUiState: StateFlow<PrayerDashboardUiState> = _staticUiState.asStateFlow()
+
+    private val _countdownState = MutableStateFlow(PrayerCountdownUiState())
+    val countdownState: StateFlow<PrayerCountdownUiState> = _countdownState.asStateFlow()
 
     private var currentPreferences = UserPreferences()
     private val currentDateState = MutableStateFlow<LocalDate?>(null)
     private var cachedDailyTimes: DailyPrayerTimes? = null
+    private var cachedYesterdayMaghribMillis: Long? = null
     private var hasAttemptedLaunchUpdateCheck = false
+
+    private inline fun updateCoreState(transform: (PrayerDashboardUiState) -> PrayerDashboardUiState) {
+        _staticUiState.update(transform)
+        _uiState.update(transform)
+    }
 
     init {
         // Observe preferences and recalculate on changes
@@ -184,7 +210,7 @@ class PrayerViewModel(
         // Observe active congregational prayer auto-mute ringer state
         viewModelScope.launch {
             preferencesRepository.savedRingerStateFlow.collectLatest { savedState ->
-                _uiState.update { it.copy(savedRingerState = savedState) }
+                updateCoreState { it.copy(savedRingerState = savedState) }
             }
         }
 
@@ -202,7 +228,7 @@ class PrayerViewModel(
                         val todayLog = history.dailyLogs.find { it.date == today }
                             ?: today?.let { DailyPrayerLog(it) }
                             ?: DailyPrayerLog(LocalDate(2026, 1, 1))
-                        _uiState.update {
+                        updateCoreState {
                             it.copy(
                                 todayPrayerLog = todayLog,
                                 rollingPrayerHistory = history
@@ -222,36 +248,38 @@ class PrayerViewModel(
                         repo.observeDailyFast(date)
                     }
                     .collectLatest { fastRecord ->
-                        _uiState.update { it.copy(todayFastRecord = fastRecord) }
+                        updateCoreState { it.copy(todayFastRecord = fastRecord) }
                     }
             }
 
             viewModelScope.launch {
-                currentDateState
-                    .filterNotNull()
-                    .map { date -> IslamicCalendarHelper.resolveIslamicDate(date).hijriYear }
+                combine(
+                    currentDateState.filterNotNull(),
+                    preferencesRepository.userPreferencesFlow.map { it.hijriDayOffsetDays }.distinctUntilChanged()
+                ) { date, offset ->
+                    IslamicCalendarHelper.resolveIslamicDate(date, offset).hijriYear
+                }
                     .distinctUntilChanged()
                     .flatMapLatest { year ->
                         repo.observeRamadanProgress(year)
                     }
                     .collectLatest { progress ->
-                        _uiState.update { it.copy(ramadanProgress = progress) }
+                        updateCoreState { it.copy(ramadanProgress = progress) }
                     }
             }
 
             viewModelScope.launch {
                 repo.observeRamadanSettings().collectLatest { settings ->
-                    _uiState.update { it.copy(ramadanSettings = settings) }
+                    updateCoreState { it.copy(ramadanSettings = settings) }
                 }
             }
         }
 
-        // 1-second live countdown ticker, active ONLY while the UI is collecting uiState.
-        // The ViewModel outlives a backgrounded (stopped) Activity, and the pinned foreground
-        // service keeps the process alive, so an unconditional ticker would run forever.
+        // 1-second live countdown ticker, active ONLY while a UI screen or subscriber collects state.
         viewModelScope.launch {
-            _uiState.subscriptionCount
-                .map { it > 0 }
+            combine(_uiState.subscriptionCount, _countdownState.subscriptionCount) { uiSubs, tickSubs ->
+                uiSubs > 0 || tickSubs > 0
+            }
                 .distinctUntilChanged()
                 .collectLatest { hasSubscribers ->
                     if (!hasSubscribers) return@collectLatest
@@ -384,7 +412,7 @@ class PrayerViewModel(
      * Toggles expansion state of the dashboard Night & Fasting card.
      */
     fun toggleNightFastingCardExpanded() {
-        _uiState.update { it.copy(isNightFastingCardExpanded = !it.isNightFastingCardExpanded) }
+        updateCoreState { it.copy(isNightFastingCardExpanded = !it.isNightFastingCardExpanded) }
     }
 
     /**
@@ -427,7 +455,7 @@ class PrayerViewModel(
      * Updates the current floating navbar tab destination.
      */
     fun selectNavTab(tab: AppNavTab) {
-        _uiState.update {
+        updateCoreState {
             it.copy(
                 currentTab = tab,
                 isSettingsOpen = (tab == AppNavTab.SETTINGS),
@@ -446,48 +474,48 @@ class PrayerViewModel(
      * Toggles visibility of the dedicated Prayer Tracker & 7-Day Habits page.
      */
     fun setTrackerOpen(isOpen: Boolean) {
-        _uiState.update { it.copy(isTrackerOpen = isOpen) }
+        updateCoreState { it.copy(isTrackerOpen = isOpen) }
     }
 
     /**
      * Toggles visibility of the dedicated Night & Tahajjud Sky page.
      */
     fun setTahajjudOpen(isOpen: Boolean) {
-        _uiState.update { it.copy(isTahajjudOpen = isOpen) }
+        updateCoreState { it.copy(isTahajjudOpen = isOpen) }
     }
 
     /**
      * Toggles visibility of the dedicated Friday (Jumu'ah) Guide page.
      */
     fun setFridayGuideOpen(isOpen: Boolean) {
-        _uiState.update { it.copy(isFridayGuideOpen = isOpen) }
+        updateCoreState { it.copy(isFridayGuideOpen = isOpen) }
     }
 
     /**
      * Opens the quick guided setup wizard on demand from Settings.
      */
     fun openOnboarding() {
-        _uiState.update { it.copy(isOnboardingForced = true) }
+        updateCoreState { it.copy(isOnboardingForced = true) }
     }
 
     /**
      * Marks guided onboarding complete and returns to the main dashboard.
      */
     fun completeOnboarding() {
-        _uiState.update { it.copy(isOnboardingForced = false) }
+        updateCoreState { it.copy(isOnboardingForced = false) }
         viewModelScope.launch {
             preferencesRepository.updateHasCompletedOnboarding(true)
         }
     }
 
     /**
-     * Increments the Friday Salawat counter and persists it.
+     * Increments the Friday Salawat counter atomically in DataStore.
      */
     fun incrementSalawat() {
-        val next = _uiState.value.salawatCount + 1
-        _uiState.update { it.copy(salawatCount = next) }
+        updateCoreState { it.copy(salawatCount = it.salawatCount + 1) }
         viewModelScope.launch {
-            preferencesRepository.updateSalawatCount(next)
+            val persisted = preferencesRepository.incrementSalawatCount()
+            updateCoreState { it.copy(salawatCount = persisted) }
         }
     }
 
@@ -495,7 +523,7 @@ class PrayerViewModel(
      * Resets the Friday Salawat counter and persists it.
      */
     fun resetSalawat() {
-        _uiState.update { it.copy(salawatCount = 0) }
+        updateCoreState { it.copy(salawatCount = 0) }
         viewModelScope.launch {
             preferencesRepository.updateSalawatCount(0)
         }
@@ -530,7 +558,7 @@ class PrayerViewModel(
      * Toggles visibility of the dedicated Ramadan & Eid Hub screen.
      */
     fun setRamadanOpen(isOpen: Boolean) {
-        _uiState.update { it.copy(isRamadanOpen = isOpen) }
+        updateCoreState { it.copy(isRamadanOpen = isOpen) }
     }
 
     /**
@@ -623,7 +651,7 @@ class PrayerViewModel(
      * Toggles or updates settings screen visibility.
      */
     fun setSettingsOpen(isOpen: Boolean) {
-        _uiState.update {
+        updateCoreState {
             it.copy(
                 isSettingsOpen = isOpen,
                 currentTab = if (isOpen) AppNavTab.SETTINGS else AppNavTab.DASHBOARD
@@ -653,14 +681,14 @@ class PrayerViewModel(
      * Toggles or updates Tasbih counter screen visibility.
      */
     fun setTasbihOpen(isOpen: Boolean) {
-        _uiState.update { it.copy(isTasbihOpen = isOpen) }
+        updateCoreState { it.copy(isTasbihOpen = isOpen) }
     }
 
     /**
      * Toggles or updates Qibla compass screen visibility.
      */
     fun setQiblaOpen(isOpen: Boolean) {
-        _uiState.update { it.copy(isQiblaOpen = isOpen) }
+        updateCoreState { it.copy(isQiblaOpen = isOpen) }
     }
 
     /**
@@ -677,13 +705,13 @@ class PrayerViewModel(
     }
 
     /**
-     * Increments current Tasbih count and persists it.
+     * Increments current Tasbih count atomically in DataStore.
      */
     fun incrementTasbih() {
-        val next = _uiState.value.tasbihCount + 1
-        _uiState.update { it.copy(tasbihCount = next) }
+        updateCoreState { it.copy(tasbihCount = it.tasbihCount + 1) }
         viewModelScope.launch {
-            preferencesRepository.updateTasbihCount(next)
+            val persisted = preferencesRepository.incrementTasbihCount()
+            updateCoreState { it.copy(tasbihCount = persisted) }
         }
     }
 
@@ -691,7 +719,7 @@ class PrayerViewModel(
      * Resets current Tasbih count back to 0 and persists it.
      */
     fun resetTasbih() {
-        _uiState.update { it.copy(tasbihCount = 0) }
+        updateCoreState { it.copy(tasbihCount = 0) }
         viewModelScope.launch {
             preferencesRepository.updateTasbihCount(0)
         }
@@ -701,7 +729,7 @@ class PrayerViewModel(
      * Sets operating Tasbih target mode and persists it.
      */
     fun setTasbihMode(mode: TasbihTargetMode) {
-        _uiState.update { it.copy(tasbihMode = mode) }
+        updateCoreState { it.copy(tasbihMode = mode) }
         viewModelScope.launch {
             preferencesRepository.updateTasbihMode(mode)
         }
@@ -762,6 +790,26 @@ class PrayerViewModel(
         viewModelScope.launch {
             preferencesRepository.updateHighLatitudeRule(rule)
             alarmScheduler?.scheduleRollingAlarms(preferences = currentPreferences.copy(highLatitudeRule = rule))
+        }
+    }
+
+    /**
+     * Updates regional Hijri moonsighting day offset (`-2..+2`) and reschedules alarms.
+     */
+    fun updateHijriDayOffsetDays(offsetDays: Int) {
+        val clamped = offsetDays.coerceIn(-2, 2)
+        viewModelScope.launch {
+            preferencesRepository.updateHijriDayOffsetDays(clamped)
+            alarmScheduler?.scheduleRollingAlarms(preferences = currentPreferences.copy(hijriDayOffsetDays = clamped))
+        }
+    }
+
+    /**
+     * Updates whether background launch checks against GitHub Releases are enabled.
+     */
+    fun toggleAutoCheckUpdates(enabled: Boolean) {
+        viewModelScope.launch {
+            preferencesRepository.updateAutoCheckUpdatesEnabled(enabled)
         }
     }
 
@@ -853,10 +901,11 @@ class PrayerViewModel(
     }
 
     /**
-     * Checks GitHub Releases once on app launch when the throttle interval has elapsed.
+     * Checks GitHub Releases once on app launch when enabled and the throttle interval has elapsed.
      */
     fun checkForUpdatesOnLaunch() {
         val engine = updateEngine ?: return
+        if (!currentPreferences.autoCheckUpdatesEnabled) return
         if (hasAttemptedLaunchUpdateCheck) return
         hasAttemptedLaunchUpdateCheck = true
 
@@ -878,7 +927,7 @@ class PrayerViewModel(
         if (currentUpdate.isChecking || currentUpdate.isDownloading) return
 
         viewModelScope.launch {
-            _uiState.update { state ->
+            updateCoreState { state ->
                 state.copy(
                     updateState = state.updateState.copy(
                         isChecking = true,
@@ -900,7 +949,7 @@ class PrayerViewModel(
                         engine.notifyUpdateAvailable(release)
                         preferencesRepository.updateLastNotifiedUpdateVersion(release.versionName)
                     }
-                    _uiState.update { state ->
+                    updateCoreState { state ->
                         state.copy(
                             updateState = state.updateState.copy(
                                 isChecking = false,
@@ -915,7 +964,7 @@ class PrayerViewModel(
                 }
 
                 is UpdateCheckResult.UpToDate -> {
-                    _uiState.update { state ->
+                    updateCoreState { state ->
                         state.copy(
                             updateState = state.updateState.copy(
                                 isChecking = false,
@@ -931,7 +980,7 @@ class PrayerViewModel(
                 }
 
                 is UpdateCheckResult.Failure -> {
-                    _uiState.update { state ->
+                    updateCoreState { state ->
                         state.copy(
                             updateState = state.updateState.copy(
                                 isChecking = false,
@@ -947,7 +996,7 @@ class PrayerViewModel(
     }
 
     fun openUpdateDialog() {
-        _uiState.update { state ->
+        updateCoreState { state ->
             state.copy(
                 updateState = state.updateState.copy(
                     showUpdateDialog = true,
@@ -958,7 +1007,7 @@ class PrayerViewModel(
     }
 
     fun dismissUpdateDialog() {
-        _uiState.update { state ->
+        updateCoreState { state ->
             state.copy(
                 updateState = state.updateState.copy(
                     showUpdateDialog = false,
@@ -975,7 +1024,7 @@ class PrayerViewModel(
         if (currentUpdate.isDownloading) return
 
         if (!engine.canRequestPackageInstalls()) {
-            _uiState.update { state ->
+            updateCoreState { state ->
                 state.copy(
                     updateState = state.updateState.copy(
                         needsInstallPermission = true,
@@ -987,7 +1036,7 @@ class PrayerViewModel(
         }
 
         viewModelScope.launch {
-            _uiState.update { state ->
+            updateCoreState { state ->
                 state.copy(
                     updateState = state.updateState.copy(
                         isDownloading = true,
@@ -999,7 +1048,7 @@ class PrayerViewModel(
             }
 
             val downloadResult = engine.downloadAndVerifyApk(release) { percent ->
-                _uiState.update { state ->
+                updateCoreState { state ->
                     state.copy(
                         updateState = state.updateState.copy(downloadProgressPercent = percent)
                     )
@@ -1008,7 +1057,7 @@ class PrayerViewModel(
 
             downloadResult.fold(
                 onSuccess = { apkFile ->
-                    _uiState.update { state ->
+                    updateCoreState { state ->
                         state.copy(
                             updateState = state.updateState.copy(
                                 isDownloading = false,
@@ -1020,7 +1069,7 @@ class PrayerViewModel(
                     }
                     val installResult = engine.launchApkInstaller(apkFile)
                     if (installResult.isFailure) {
-                        _uiState.update { state ->
+                        updateCoreState { state ->
                             state.copy(
                                 updateState = state.updateState.copy(
                                     errorMessage = installResult.exceptionOrNull()?.message
@@ -1031,7 +1080,7 @@ class PrayerViewModel(
                     }
                 },
                 onFailure = { error ->
-                    _uiState.update { state ->
+                    updateCoreState { state ->
                         state.copy(
                             updateState = state.updateState.copy(
                                 isDownloading = false,
@@ -1049,7 +1098,7 @@ class PrayerViewModel(
         val path = _uiState.value.updateState.downloadedApkPath ?: return
         val apkFile = File(path)
         if (!apkFile.exists()) {
-            _uiState.update { state ->
+            updateCoreState { state ->
                 state.copy(
                     updateState = state.updateState.copy(
                         downloadedApkPath = null,
@@ -1060,14 +1109,14 @@ class PrayerViewModel(
             return
         }
         if (!engine.canRequestPackageInstalls()) {
-            _uiState.update { state ->
+            updateCoreState { state ->
                 state.copy(updateState = state.updateState.copy(needsInstallPermission = true))
             }
             return
         }
         val installResult = engine.launchApkInstaller(apkFile)
         if (installResult.isFailure) {
-            _uiState.update { state ->
+            updateCoreState { state ->
                 state.copy(
                     updateState = state.updateState.copy(
                         errorMessage = installResult.exceptionOrNull()?.message
@@ -1081,7 +1130,7 @@ class PrayerViewModel(
     fun refreshInstallPermissionState() {
         val engine = updateEngine ?: return
         if (_uiState.value.updateState.needsInstallPermission && engine.canRequestPackageInstalls()) {
-            _uiState.update { state ->
+            updateCoreState { state ->
                 state.copy(updateState = state.updateState.copy(needsInstallPermission = false))
             }
         }
@@ -1109,7 +1158,14 @@ class PrayerViewModel(
             parameters = params,
             manualOffsets = currentPreferences.manualMinuteOffsets
         )
+        val yesterdayTimes = calculationEngine.computeDailyTimes(
+            date = localDate.minus(1, DateTimeUnit.DAY),
+            coordinates = coordinates,
+            parameters = params,
+            manualOffsets = currentPreferences.manualMinuteOffsets
+        )
         cachedDailyTimes = dailyTimes
+        cachedYesterdayMaghribMillis = yesterdayTimes.maghrib
 
         val window = calculationEngine.getPrayerWindow(
             timestampEpochMillis = nowMillis,
@@ -1135,8 +1191,9 @@ class PrayerViewModel(
             isFriday = isFriday,
             jamaatTimesMillis = mosqueInfo.jamaatTimesMillis
         )
-        val hijriDate = formatHijriDate(localDate)
-        val islamicDate = IslamicCalendarHelper.resolveIslamicDate(localDate)
+        val hijriOffset = currentPreferences.hijriDayOffsetDays
+        val hijriDate = formatHijriDate(localDate, hijriOffset)
+        val islamicDate = IslamicCalendarHelper.resolveIslamicDate(localDate, hijriOffset)
 
         val remainingMillis = (nextPrayerTimeMillis - nowMillis).coerceAtLeast(0L)
         val countdown = formatDuration(remainingMillis)
@@ -1151,10 +1208,24 @@ class PrayerViewModel(
         val iftarFormatted = formatTimeOfDay(dailyTimes.maghrib, timeZone)
         val (fastingCountdownStr, isToIftar) = computeFastingCountdown(dailyTimes, nowMillis)
 
-        val tahajjudSchedule = NightFastingCalculator.resolveTahajjudSchedule(dailyTimes, nowMillis, timeZone)
+        val tahajjudSchedule = NightFastingCalculator.resolveTahajjudSchedule(
+            dailyTimes = dailyTimes,
+            nowEpochMillis = nowMillis,
+            timeZone = timeZone,
+            yesterdayMaghribMillis = yesterdayTimes.maghrib
+        )
         val voluntaryFasting = NightFastingCalculator.resolveVoluntaryFasting(localDate, islamicDate, dailyTimes, nowMillis, timeZone)
+        val tahajjudCountdownStr = NightFastingCalculator.formatDuration(tahajjudSchedule.remainingMillis)
 
-        _uiState.update {
+        _countdownState.value = PrayerCountdownUiState(
+            liveCountdownString = countdown,
+            fastingCountdown = fastingCountdownStr,
+            isFastingCountdownToIftar = isToIftar,
+            tahajjudCountdown = tahajjudCountdownStr,
+            isTahajjudActiveNow = tahajjudSchedule.isTahajjudActiveNow
+        )
+
+        updateCoreState {
             it.copy(
                 locationName = currentPreferences.location.resolvedLocationName.ifEmpty { "Larkana" },
                 nextPrayerType = nextPrayer,
@@ -1173,7 +1244,7 @@ class PrayerViewModel(
                 iftarFormatted = iftarFormatted,
                 fastingCountdown = fastingCountdownStr,
                 isFastingCountdownToIftar = isToIftar,
-                tahajjudCountdown = NightFastingCalculator.formatDuration(tahajjudSchedule.remainingMillis),
+                tahajjudCountdown = tahajjudCountdownStr,
                 isTahajjudActiveNow = tahajjudSchedule.isTahajjudActiveNow,
                 tahajjudStartTimeFormatted = tahajjudSchedule.formattedLastThirdStart,
                 islamicMidnightFormatted = tahajjudSchedule.formattedIslamicMidnight,
@@ -1221,20 +1292,34 @@ class PrayerViewModel(
         }
 
         val (tahajjudCountdownStr, isTahajjudActive) = if (times != null) {
-            val schedule = NightFastingCalculator.resolveTahajjudSchedule(times, nowMillis)
+            val schedule = NightFastingCalculator.resolveTahajjudSchedule(
+                dailyTimes = times,
+                nowEpochMillis = nowMillis,
+                yesterdayMaghribMillis = cachedYesterdayMaghribMillis
+            )
             Pair(NightFastingCalculator.formatDuration(schedule.remainingMillis), schedule.isTahajjudActiveNow)
         } else {
             Pair(currentState.tahajjudCountdown, currentState.isTahajjudActiveNow)
         }
 
-        _uiState.update {
-            it.copy(
-                liveCountdownString = countdown,
-                fastingCountdown = fastingCountdownStr,
-                isFastingCountdownToIftar = isToIftar,
-                tahajjudCountdown = tahajjudCountdownStr,
-                isTahajjudActiveNow = isTahajjudActive
-            )
+        _countdownState.value = PrayerCountdownUiState(
+            liveCountdownString = countdown,
+            fastingCountdown = fastingCountdownStr,
+            isFastingCountdownToIftar = isToIftar,
+            tahajjudCountdown = tahajjudCountdownStr,
+            isTahajjudActiveNow = isTahajjudActive
+        )
+
+        if (_uiState.subscriptionCount.value > 0) {
+            _uiState.update {
+                it.copy(
+                    liveCountdownString = countdown,
+                    fastingCountdown = fastingCountdownStr,
+                    isFastingCountdownToIftar = isToIftar,
+                    tahajjudCountdown = tahajjudCountdownStr,
+                    isTahajjudActiveNow = isTahajjudActive
+                )
+            }
         }
     }
 
@@ -1312,11 +1397,11 @@ class PrayerViewModel(
             return String.format(Locale.US, "%02d:%02d %s", displayHour, minute, period)
         }
 
-        fun formatHijriDate(date: LocalDate): String {
+        fun formatHijriDate(date: LocalDate, hijriOffsetDays: Int = 0): String {
             return try {
-                val hijrahDate = HijrahDate.from(
-                    java.time.LocalDate.of(date.year, date.monthNumber, date.dayOfMonth)
-                )
+                val javaDate = java.time.LocalDate.of(date.year, date.monthNumber, date.dayOfMonth)
+                    .plusDays(hijriOffsetDays.coerceIn(-2, 2).toLong())
+                val hijrahDate = HijrahDate.from(javaDate)
                 val formatter = DateTimeFormatter.ofPattern("d MMMM yyyy 'AH'", Locale.US)
                 formatter.format(hijrahDate)
             } catch (e: Exception) {

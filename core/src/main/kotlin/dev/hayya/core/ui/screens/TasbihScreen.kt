@@ -25,17 +25,21 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.Refresh
@@ -73,6 +77,7 @@ import androidx.compose.ui.unit.sp
 import dev.hayya.core.domain.tasbih.DhikrPhase
 import dev.hayya.core.domain.tasbih.TasbihMilestoneHelper
 import dev.hayya.core.domain.tasbih.TasbihTargetMode
+import dev.hayya.core.ui.theme.ArabicScriptText
 import dev.hayya.core.ui.theme.HayyaTheme
 import dev.hayya.core.ui.theme.TabularClockStyle
 import kotlinx.coroutines.launch
@@ -151,14 +156,20 @@ fun TasbihScreen(
             },
         color = MaterialTheme.colorScheme.background
     ) {
-        Column(
+        BoxWithConstraints(
             modifier = Modifier
                 .fillMaxSize()
                 .statusBarsPadding()
-                .padding(horizontal = 20.dp, vertical = 14.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.SpaceBetween
         ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = maxHeight)
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 20.dp, vertical = 14.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.SpaceBetween
+            ) {
             // Top Bar: Back, Lap Pill, Reset
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -245,7 +256,7 @@ fun TasbihScreen(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                Text(
+                ArabicScriptText(
                     text = currentPhase.arabic,
                     fontSize = 34.sp,
                     lineHeight = 46.sp,
@@ -385,6 +396,7 @@ fun TasbihScreen(
                         }
                     }
                 }
+            }
             }
         }
 

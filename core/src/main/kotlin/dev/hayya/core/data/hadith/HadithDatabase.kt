@@ -79,7 +79,8 @@ class HadithDatabase(
                 title TEXT NOT NULL,
                 pillar TEXT NOT NULL,
                 remote_count INTEGER NOT NULL DEFAULT 0,
-                synced_count INTEGER NOT NULL DEFAULT 0
+                synced_count INTEGER NOT NULL DEFAULT 0,
+                synced_pages INTEGER NOT NULL DEFAULT 0
             )
             """.trimIndent()
         )
@@ -100,6 +101,14 @@ class HadithDatabase(
                 title,
                 matn,
                 attribution
+            )
+            """.trimIndent()
+        )
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS hadith_fts_map (
+                hadith_id TEXT PRIMARY KEY,
+                fts_rowid INTEGER NOT NULL
             )
             """.trimIndent()
         )
@@ -124,6 +133,23 @@ class HadithDatabase(
                 """.trimIndent()
             )
             db.execSQL("CREATE INDEX IF NOT EXISTS idx_hadiths_book ON hadiths(book_id)")
+        }
+        if (oldVersion < 3) {
+            db.execSQL("ALTER TABLE hadith_categories ADD COLUMN synced_pages INTEGER NOT NULL DEFAULT 0")
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS hadith_fts_map (
+                    hadith_id TEXT PRIMARY KEY,
+                    fts_rowid INTEGER NOT NULL
+                )
+                """.trimIndent()
+            )
+            db.execSQL(
+                """
+                INSERT OR REPLACE INTO hadith_fts_map(hadith_id, fts_rowid)
+                SELECT hadith_id, docid FROM hadith_fts
+                """.trimIndent()
+            )
         }
     }
 
@@ -151,14 +177,20 @@ class HadithDatabase(
         entries: List<HadithEntry>
     ) = withContext(Dispatchers.IO) {
         val db = writableDatabase
-        upsertHadithsInternal(db, entries)
-        val values = ContentValues().apply {
-            put("book_id", bookId)
-            put("title", bookTitle)
-            put("downloaded_count", entries.size)
-            put("downloaded_langs", downloadedLanguages.joinToString(","))
+        db.beginTransaction()
+        try {
+            upsertHadithsInternal(db, entries)
+            val values = ContentValues().apply {
+                put("book_id", bookId)
+                put("title", bookTitle)
+                put("downloaded_count", entries.size)
+                put("downloaded_langs", downloadedLanguages.joinToString(","))
+            }
+            db.insertWithOnConflict("hadith_books", null, values, SQLiteDatabase.CONFLICT_REPLACE)
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
         }
-        db.insertWithOnConflict("hadith_books", null, values, SQLiteDatabase.CONFLICT_REPLACE)
         notifyChanged()
     }
 
@@ -171,7 +203,11 @@ class HadithDatabase(
                 arrayOf(bookId)
             )
             db.execSQL(
-                "DELETE FROM hadith_fts WHERE hadith_id IN (SELECT id FROM hadiths WHERE book_id = ?)",
+                "DELETE FROM hadith_fts WHERE docid IN (SELECT m.fts_rowid FROM hadith_fts_map m INNER JOIN hadiths h ON h.id = m.hadith_id WHERE h.book_id = ?)",
+                arrayOf(bookId)
+            )
+            db.execSQL(
+                "DELETE FROM hadith_fts_map WHERE hadith_id IN (SELECT id FROM hadiths WHERE book_id = ?)",
                 arrayOf(bookId)
             )
             db.delete("hadiths", "book_id = ?", arrayOf(bookId))
@@ -402,12 +438,18 @@ class HadithDatabase(
                     arrayOf(cat.id)
                 ).use { cursor -> if (cursor.moveToFirst()) cursor.getInt(0) else 0 }
 
+                val existingPages = db.rawQuery(
+                    "SELECT synced_pages FROM hadith_categories WHERE id = ?",
+                    arrayOf(cat.id)
+                ).use { cursor -> if (cursor.moveToFirst()) cursor.getInt(0) else 0 }
+
                 val values = ContentValues().apply {
                     put("id", cat.id)
                     put("title", cat.title)
                     put("pillar", cat.pillar.id)
                     put("remote_count", cat.remoteCount)
                     put("synced_count", syncedCount)
+                    put("synced_pages", maxOf(existingPages, cat.syncedPages))
                 }
                 db.insertWithOnConflict("hadith_categories", null, values, SQLiteDatabase.CONFLICT_REPLACE)
             }
@@ -418,11 +460,26 @@ class HadithDatabase(
         notifyChanged()
     }
 
+    suspend fun markCategoryPageSynced(categoryId: String, page: Int) = withContext(Dispatchers.IO) {
+        val db = writableDatabase
+        db.execSQL(
+            """
+            UPDATE hadith_categories
+            SET synced_pages = CASE WHEN ? > synced_pages THEN ? ELSE synced_pages END,
+                synced_count = (SELECT COUNT(*) FROM hadiths h WHERE h.category_id = ?)
+            WHERE id = ?
+            """.trimIndent(),
+            arrayOf(page, page, categoryId, categoryId)
+        )
+        notifyChanged()
+    }
+
     suspend fun getCategories(): List<HadithCategorySyncInfo> = withContext(Dispatchers.IO) {
         val db = readableDatabase
         val sql = """
             SELECT c.id, c.title, c.pillar, c.remote_count,
-                   (SELECT COUNT(*) FROM hadiths h WHERE h.category_id = c.id) AS synced_count
+                   (SELECT COUNT(*) FROM hadiths h WHERE h.category_id = c.id) AS synced_count,
+                   c.synced_pages
             FROM hadith_categories c
             ORDER BY c.pillar ASC, c.title ASC
         """.trimIndent()
@@ -435,7 +492,8 @@ class HadithDatabase(
                         title = cursor.getString(1),
                         pillar = HadithPillar.fromId(cursor.getString(2)),
                         remoteCount = cursor.getInt(3),
-                        syncedCount = cursor.getInt(4)
+                        syncedCount = cursor.getInt(4),
+                        syncedPages = cursor.getInt(5)
                     )
                 )
             }
@@ -491,7 +549,7 @@ class HadithDatabase(
     }
 
     private fun writeFtsRowInMemory(db: SQLiteDatabase, entry: HadithEntry) {
-        db.delete("hadith_fts", "hadith_id = ?", arrayOf(entry.id))
+        deleteFtsRowById(db, entry.id)
 
         val titles = StringBuilder(entry.arabic.title)
         val matns = StringBuilder(entry.arabic.matn)
@@ -506,11 +564,18 @@ class HadithDatabase(
             put("matn", matns.toString())
             put("attribution", entry.attribution)
         }
-        db.insert("hadith_fts", null, ftsValues)
+        val rowId = db.insert("hadith_fts", null, ftsValues)
+        if (rowId >= 0L) {
+            val mapValues = ContentValues().apply {
+                put("hadith_id", entry.id)
+                put("fts_rowid", rowId)
+            }
+            db.insertWithOnConflict("hadith_fts_map", null, mapValues, SQLiteDatabase.CONFLICT_REPLACE)
+        }
     }
 
     private fun rebuildFtsRowFromDb(db: SQLiteDatabase, hadithId: String) {
-        db.delete("hadith_fts", "hadith_id = ?", arrayOf(hadithId))
+        deleteFtsRowById(db, hadithId)
 
         var titleAgg = ""
         var matnAgg = ""
@@ -545,17 +610,35 @@ class HadithDatabase(
             put("matn", matns.toString())
             put("attribution", attribution)
         }
-        db.insert("hadith_fts", null, ftsValues)
+        val rowId = db.insert("hadith_fts", null, ftsValues)
+        if (rowId >= 0L) {
+            val mapValues = ContentValues().apply {
+                put("hadith_id", hadithId)
+                put("fts_rowid", rowId)
+            }
+            db.insertWithOnConflict("hadith_fts_map", null, mapValues, SQLiteDatabase.CONFLICT_REPLACE)
+        }
+    }
+
+    private fun deleteFtsRowById(db: SQLiteDatabase, hadithId: String) {
+        val existingRowId = db.rawQuery(
+            "SELECT fts_rowid FROM hadith_fts_map WHERE hadith_id = ?",
+            arrayOf(hadithId)
+        ).use { cursor ->
+            if (cursor.moveToFirst()) cursor.getLong(0) else null
+        }
+        if (existingRowId != null) {
+            db.delete("hadith_fts", "docid = ?", arrayOf(existingRowId.toString()))
+        } else {
+            db.delete("hadith_fts", "hadith_id = ?", arrayOf(hadithId))
+        }
     }
 
     private fun findMatchingIds(db: SQLiteDatabase, query: String, limit: Int): Set<String> {
         val ids = LinkedHashSet<String>()
 
-        val tokens = query.split(Regex("\\s+"))
-            .map { it.replace(Regex("[\"'*]"), "").trim() }
-            .filter { it.isNotEmpty() }
-        if (tokens.isNotEmpty()) {
-            val ftsQuery = tokens.joinToString(" ") { "$it*" }
+        val ftsQuery = buildSafeFtsMatchQuery(query)
+        if (ftsQuery != null) {
             runCatching {
                 db.rawQuery(
                     "SELECT DISTINCT hadith_id FROM hadith_fts WHERE hadith_fts MATCH ? LIMIT ?",
@@ -569,28 +652,34 @@ class HadithDatabase(
         }
 
         if (ids.size < limit) {
-            val remaining = (limit - ids.size).coerceAtLeast(1)
-            val likeArg = "%$query%"
+            val remainingHadiths = (limit - ids.size).coerceAtLeast(1)
+            val likeArg = "%${escapeLikeWildcards(query)}%"
             db.rawQuery(
                 """
                 SELECT DISTINCT id FROM hadiths
-                WHERE arabic_title LIKE ? OR arabic_matn LIKE ? OR attribution LIKE ? OR category_title LIKE ?
+                WHERE arabic_title LIKE ? ESCAPE '\'
+                   OR arabic_matn LIKE ? ESCAPE '\'
+                   OR attribution LIKE ? ESCAPE '\'
+                   OR category_title LIKE ? ESCAPE '\'
                 LIMIT ?
                 """.trimIndent(),
-                arrayOf(likeArg, likeArg, likeArg, likeArg, remaining.toString())
+                arrayOf(likeArg, likeArg, likeArg, likeArg, remainingHadiths.toString())
             ).use { cursor ->
                 while (cursor.moveToNext()) {
                     ids.add(cursor.getString(0))
                 }
             }
             if (ids.size < limit) {
+                val remainingTranslations = (limit - ids.size).coerceAtLeast(1)
                 db.rawQuery(
                     """
                     SELECT DISTINCT hadith_id FROM hadith_translations
-                    WHERE title LIKE ? OR matn LIKE ? OR explanation LIKE ?
+                    WHERE title LIKE ? ESCAPE '\'
+                       OR matn LIKE ? ESCAPE '\'
+                       OR explanation LIKE ? ESCAPE '\'
                     LIMIT ?
                     """.trimIndent(),
-                    arrayOf(likeArg, likeArg, likeArg, remaining.toString())
+                    arrayOf(likeArg, likeArg, likeArg, remainingTranslations.toString())
                 ).use { cursor ->
                     while (cursor.moveToNext()) {
                         ids.add(cursor.getString(0))
@@ -667,7 +756,32 @@ class HadithDatabase(
 
     companion object {
         private const val DATABASE_NAME = "hayya_hadith.db"
-        private const val DATABASE_VERSION = 2
+        private const val DATABASE_VERSION = 3
         const val DEFAULT_QUERY_LIMIT = 200
+
+        private val FTS_RESERVED_KEYWORDS = setOf("AND", "OR", "NOT", "NEAR")
+
+        internal fun buildSafeFtsMatchQuery(rawQuery: String): String? {
+            val tokens = rawQuery.split(Regex("\\s+"))
+                .map { token ->
+                    token.replace(Regex("[^\\p{L}\\p{N}\\p{M}_]"), "").trim()
+                }
+                .filter { it.isNotEmpty() }
+            if (tokens.isEmpty()) return null
+            return tokens.joinToString(" ") { clean ->
+                if (clean.uppercase() in FTS_RESERVED_KEYWORDS) {
+                    "\"$clean\""
+                } else {
+                    "$clean*"
+                }
+            }
+        }
+
+        internal fun escapeLikeWildcards(raw: String): String {
+            return raw
+                .replace("\\", "\\\\")
+                .replace("%", "\\%")
+                .replace("_", "\\_")
+        }
     }
 }

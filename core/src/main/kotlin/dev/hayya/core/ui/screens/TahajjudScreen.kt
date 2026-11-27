@@ -47,12 +47,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.hayya.core.ui.components.SectionPageHeader
 import dev.hayya.core.ui.theme.HayyaTheme
 import dev.hayya.core.ui.theme.IshaTint
 import dev.hayya.core.ui.theme.TabularClockStyle
 import dev.hayya.core.ui.theme.TabularCountdownStyle
+import dev.hayya.core.ui.viewmodel.PrayerCountdownUiState
 import dev.hayya.core.ui.viewmodel.PrayerDashboardUiState
+import kotlinx.coroutines.flow.StateFlow
 import kotlin.math.cos
 import kotlin.math.sin
 
@@ -64,9 +67,15 @@ fun TahajjudScreen(
     state: PrayerDashboardUiState,
     onBackClick: () -> Unit,
     onToggleTahajjudAlarm: (Boolean) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    countdownStateFlow: StateFlow<PrayerCountdownUiState>? = null
 ) {
     BackHandler(onBack = onBackClick)
+    val liveTick = countdownStateFlow?.collectAsStateWithLifecycle()?.value
+    val liveTahajjudActive = liveTick?.isTahajjudActiveNow ?: state.isTahajjudActiveNow
+    val liveTahajjudCountdown = liveTick?.tahajjudCountdown ?: state.tahajjudCountdown
+    val liveFastingCountdown = liveTick?.fastingCountdown ?: state.fastingCountdown
+    val liveIsFastingToIftar = liveTick?.isFastingCountdownToIftar ?: state.isFastingCountdownToIftar
 
     Surface(
         modifier = modifier.fillMaxSize(),
@@ -83,7 +92,7 @@ fun TahajjudScreen(
                 title = "Night & Fasting",
                 subtitle = "Tahajjud, Suhoor & Iftar",
                 onBackClick = onBackClick,
-                badgeText = if (state.isTahajjudActiveNow) "Active Now" else null
+                badgeText = if (liveTahajjudActive) "Active Now" else null
             )
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -107,7 +116,7 @@ fun TahajjudScreen(
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     NightSkyArcVisual(
-                        isTahajjudActive = state.isTahajjudActiveNow,
+                        isTahajjudActive = liveTahajjudActive,
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(110.dp)
@@ -116,7 +125,7 @@ fun TahajjudScreen(
                     Spacer(modifier = Modifier.height(10.dp))
 
                     Text(
-                        text = if (state.isTahajjudActiveNow) {
+                        text = if (liveTahajjudActive) {
                             "Last Third of the Night"
                         } else {
                             "Last Third Begins In"
@@ -130,7 +139,7 @@ fun TahajjudScreen(
                     Spacer(modifier = Modifier.height(4.dp))
 
                     Text(
-                        text = state.tahajjudCountdown,
+                        text = liveTahajjudCountdown,
                         style = TabularCountdownStyle.copy(
                             fontSize = 40.sp,
                             color = MaterialTheme.colorScheme.onSurface
@@ -140,7 +149,7 @@ fun TahajjudScreen(
                     Spacer(modifier = Modifier.height(4.dp))
 
                     Text(
-                        text = if (state.isTahajjudActiveNow) {
+                        text = if (liveTahajjudActive) {
                             "Best time for Tahajjud until Fajr at ${state.suhoorCutoffFormatted}"
                         } else {
                             "Tonight at ${state.tahajjudStartTimeFormatted}"
@@ -298,10 +307,10 @@ fun TahajjudScreen(
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                         )
-                        val fastLabel = if (state.isFastingCountdownToIftar) {
-                            "Iftar in ${state.fastingCountdown}"
+                        val fastLabel = if (liveIsFastingToIftar) {
+                            "Iftar in $liveFastingCountdown"
                         } else {
-                            "Suhoor in ${state.fastingCountdown}"
+                            "Suhoor in $liveFastingCountdown"
                         }
                         Surface(
                             shape = CircleShape,

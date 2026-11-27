@@ -1,6 +1,7 @@
 package dev.hayya.core.system.audio
 
 import android.media.AudioAttributes
+import android.media.AudioManager
 import com.google.common.truth.Truth.assertThat
 import org.junit.Test
 
@@ -23,7 +24,18 @@ class PrayerAudioServiceTest {
         assertThat(PrayerAudioService.DEFAULT_TIMEOUT_SECONDS).isEqualTo(60)
         assertThat(PrayerAudioService.DEFAULT_ESCALATION_SECONDS).isEqualTo(0)
         assertThat(PrayerAudioService.EXTRA_VOLUME_ESCALATION_SECONDS).isEqualTo("extra_volume_escalation_seconds")
+        assertThat(PrayerAudioService.EXTRA_SUBTITLE).isEqualTo("extra_subtitle")
+        assertThat(PrayerAudioService.EXTRA_SHOW_POST_ADHAN_DUA).isEqualTo("extra_show_post_adhan_dua")
+        assertThat(PrayerAudioService.FOREGROUND_NOTIFICATION_ID).isNotEqualTo(PrayerAudioService.DEFAULT_NOTIFICATION_ID)
         assertThat(PrayerAudioService.CHANNEL_ID).isEqualTo("channel_prayer_audio_service")
+    }
+
+    @Test
+    fun shouldSuppressLoudAdhanForCall_returnsTrueOnlyDuringActiveVoiceOrVoipCalls() {
+        assertThat(PrayerAudioService.shouldSuppressLoudAdhanForCall(AudioManager.MODE_IN_CALL)).isTrue()
+        assertThat(PrayerAudioService.shouldSuppressLoudAdhanForCall(AudioManager.MODE_IN_COMMUNICATION)).isTrue()
+        assertThat(PrayerAudioService.shouldSuppressLoudAdhanForCall(AudioManager.MODE_NORMAL)).isFalse()
+        assertThat(PrayerAudioService.shouldSuppressLoudAdhanForCall(AudioManager.MODE_RINGTONE)).isFalse()
     }
 
     @Test

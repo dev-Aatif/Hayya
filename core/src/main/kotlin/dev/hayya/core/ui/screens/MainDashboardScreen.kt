@@ -48,12 +48,20 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import dev.hayya.core.ui.viewmodel.PrayerCountdownUiState
+import kotlinx.coroutines.flow.StateFlow
 import dev.hayya.core.domain.model.AlertMode
 import dev.hayya.core.domain.model.CityPreset
 import dev.hayya.core.domain.model.PrayerType
@@ -100,7 +108,8 @@ fun MainDashboardScreen(
     onOpenTahajjud: () -> Unit = {},
     onOpenFridayGuide: () -> Unit = {},
     onSelectCity: (CityPreset) -> Unit = {},
-    onOpenUpdateDialog: () -> Unit = {}
+    onOpenUpdateDialog: () -> Unit = {},
+    countdownStateFlow: StateFlow<PrayerCountdownUiState>? = null
 ) {
     var showCityPicker by remember { mutableStateOf(false) }
 
@@ -143,7 +152,8 @@ fun MainDashboardScreen(
             HeroCelestialCard(
                 nextPrayerType = state.nextPrayerType,
                 nextPrayerName = friendlyPrayerName(state.nextPrayerType, state.isFriday),
-                countdown = state.liveCountdownString,
+                fallbackCountdown = state.liveCountdownString,
+                countdownStateFlow = countdownStateFlow,
                 timeFormatted = state.nextPrayerTimeFormatted,
                 progressRatio = state.progressRatio,
                 isAutoMuted = state.savedRingerState.isAutoMuted,
@@ -317,7 +327,8 @@ private fun DashboardTopBar(
 private fun HeroCelestialCard(
     nextPrayerType: PrayerType,
     nextPrayerName: String,
-    countdown: String,
+    fallbackCountdown: String,
+    countdownStateFlow: StateFlow<PrayerCountdownUiState>?,
     timeFormatted: String,
     progressRatio: Float,
     isAutoMuted: Boolean,
@@ -385,11 +396,21 @@ private fun HeroCelestialCard(
 
                 Spacer(modifier = Modifier.height(4.dp))
 
-                // Monumental Jitter-Free Countdown
+                // Monumental Jitter-Free Countdown (collected locally at text leaf to prevent outer recompositions)
+                val liveCountdown = countdownStateFlow?.collectAsStateWithLifecycle()?.value?.liveCountdownString
+                    ?: fallbackCountdown
+                val screenWidthDp = LocalConfiguration.current.screenWidthDp
+                val heroFontSize = when {
+                    screenWidthDp < 340 -> 38.sp
+                    screenWidthDp < 380 -> 44.sp
+                    else -> 50.sp
+                }
                 Text(
-                    text = countdown,
+                    text = liveCountdown,
+                    maxLines = 1,
+                    softWrap = false,
                     style = TabularCountdownStyle.copy(
-                        fontSize = 50.sp,
+                        fontSize = heroFontSize,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onBackground
                     )
@@ -602,34 +623,49 @@ private fun PrayerScheduleRow(
             if (isObligatory) {
                 Box(
                     modifier = Modifier
-                        .size(30.dp)
+                        .size(48.dp)
                         .clip(CircleShape)
-                        .background(
-                            if (isCompleted) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
-                        )
-                        .border(
-                            1.5.dp,
-                            if (isCompleted) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f),
-                            CircleShape
-                        )
-                        .clickable(onClick = onToggleCompleted),
+                        .clickable(onClick = onToggleCompleted)
+                        .semantics {
+                            role = Role.Checkbox
+                            contentDescription = if (isCompleted) {
+                                "$displayName marked prayed, tap to unmark"
+                            } else {
+                                "Mark $displayName as prayed"
+                            }
+                        },
                     contentAlignment = Alignment.Center
                 ) {
-                    if (isCompleted) {
-                        Icon(
-                            imageVector = Icons.Outlined.Check,
-                            contentDescription = "$displayName prayed",
-                            tint = MaterialTheme.colorScheme.onPrimary,
-                            modifier = Modifier.size(16.dp)
-                        )
+                    Box(
+                        modifier = Modifier
+                            .size(30.dp)
+                            .clip(CircleShape)
+                            .background(
+                                if (isCompleted) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
+                            )
+                            .border(
+                                1.5.dp,
+                                if (isCompleted) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f),
+                                CircleShape
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (isCompleted) {
+                            Icon(
+                                imageVector = Icons.Outlined.Check,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onPrimary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
                     }
                 }
             } else {
                 // Non-obligatory Sunrise marker aligned neatly with checkmarks
                 Box(
-                    modifier = Modifier.size(30.dp),
+                    modifier = Modifier.size(48.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Box(

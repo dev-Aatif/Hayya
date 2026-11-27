@@ -16,6 +16,8 @@ import dev.hayya.core.system.receivers.PreferenceDataStoreProvider
 import dev.hayya.core.ui.viewmodel.PrayerViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.datetime.Clock
 import kotlinx.datetime.DayOfWeek
@@ -66,23 +68,28 @@ object PrayerWidgetUpdater {
     const val DEST_TAHAJJUD = "tahajjud"
     const val DEST_RAMADAN = "ramadan"
 
+    private val updateMutex = Mutex()
+
     /**
      * Reads current calculation and preferences asynchronously and updates all AppWidgets.
+     * Serialized via [updateMutex] to avoid redundant overlapping Glance passes.
      *
      * IMPORTANT: This function must NOT broadcast [ACTION_PRAYER_DATA_CHANGED]. Receivers handle
      * that action by calling this function, so re-broadcasting here creates an unbounded loop.
      */
     suspend fun updateAllWidgets(context: Context) {
         withContext(Dispatchers.Default) {
-            try {
-                CompactPrayerWidget().updateAll(context)
-                FullTimetableWidget().updateAll(context)
-                DailyPrayersWidget().updateAll(context)
-                NextPrayerBannerWidget().updateAll(context)
-                FastingAndNightWidget().updateAll(context)
-                Log.d(TAG, "Successfully refreshed all 5 prayer AppWidgets")
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to update prayer widgets", e)
+            updateMutex.withLock {
+                try {
+                    CompactPrayerWidget().updateAll(context)
+                    FullTimetableWidget().updateAll(context)
+                    DailyPrayersWidget().updateAll(context)
+                    NextPrayerBannerWidget().updateAll(context)
+                    FastingAndNightWidget().updateAll(context)
+                    Log.d(TAG, "Successfully refreshed all 5 prayer AppWidgets")
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to update prayer widgets", e)
+                }
             }
         }
     }
@@ -161,7 +168,10 @@ object PrayerWidgetUpdater {
                 val prayerLogRepo = PrayerLogRepository(dataStore)
                 val dailyLog = prayerLogRepo.observeDailyLog(localDate).first()
                 val isFriday = localDate.dayOfWeek == DayOfWeek.FRIDAY
-                val islamicDate = IslamicCalendarHelper.resolveIslamicDate(localDate)
+                val islamicDate = IslamicCalendarHelper.resolveIslamicDate(
+                    date = localDate,
+                    hijriOffsetDays = userPrefs.hijriDayOffsetDays
+                )
                 val tahajjud = NightFastingCalculator.resolveTahajjudSchedule(dailyTimes, nowMillis, timeZone)
 
                 val shortCity = userPrefs.location.resolvedLocationName

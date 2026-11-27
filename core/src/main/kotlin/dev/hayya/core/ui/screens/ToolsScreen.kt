@@ -63,6 +63,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.hayya.core.domain.model.PostAdhanDua
+import dev.hayya.core.ui.theme.ArabicScriptText
 import dev.hayya.core.domain.model.PrayerType
 import dev.hayya.core.domain.tasbih.TasbihMilestoneHelper
 import dev.hayya.core.ui.theme.HayyaTheme
@@ -672,7 +673,7 @@ private fun PostAdhanDuaModalSheet(
                 shape = RoundedCornerShape(18.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
             ) {
-                Text(
+                ArabicScriptText(
                     text = PostAdhanDua.ARABIC_TEXT,
                     fontSize = 22.sp,
                     lineHeight = 38.sp,

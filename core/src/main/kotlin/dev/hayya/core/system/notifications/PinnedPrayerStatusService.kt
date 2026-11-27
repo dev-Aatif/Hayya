@@ -1,5 +1,6 @@
 package dev.hayya.core.system.notifications
 
+import android.Manifest
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -7,18 +8,22 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
 import androidx.core.app.ServiceCompat
+import androidx.core.content.ContextCompat
 import com.batoulapps.adhan.Coordinates
 import dev.hayya.core.R
 import dev.hayya.core.data.preferences.UserPreferencesRepository
 import dev.hayya.core.domain.calculation.PrayerCalculationEngine
 import dev.hayya.core.domain.model.PrayerWindow
+import dev.hayya.core.domain.model.UserPreferences
 import dev.hayya.core.system.receivers.PreferenceDataStoreProvider
 import dev.hayya.core.ui.MainActivity
 import dev.hayya.core.ui.viewmodel.PrayerViewModel
@@ -56,7 +61,7 @@ class PinnedPrayerStatusService : Service() {
     override fun onCreate() {
         super.onCreate()
         isRunning = true
-        ensureNotificationChannel()
+        ensureNotificationChannel(this)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -78,6 +83,7 @@ class PinnedPrayerStatusService : Service() {
 
     private fun startForegroundWithServiceType() {
         val initialNotification = buildStatusNotification(
+            context = this,
             title = "Hayya Prayer Times",
             subtitle = "Calculating upcoming prayer window..."
         )
@@ -118,58 +124,12 @@ class PinnedPrayerStatusService : Service() {
                     val isInteractive = powerManager?.isInteractive ?: true
                     if (isInteractive || forceImmediateRender) {
                         forceImmediateRender = false
-                        val nowMillis = Clock.System.now().toEpochMilliseconds()
-                        val timeZone = TimeZone.currentSystemDefault()
-                        val localDate = Instant.fromEpochMilliseconds(nowMillis).toLocalDateTime(timeZone).date
-
-                        val coordinates = Coordinates(userPrefs.location.latitude, userPrefs.location.longitude)
-                        val params = calculationEngine.createParameters(
-                            method = userPrefs.calculationMethod.toAdhanMethod(),
-                            madhab = userPrefs.madhab.toAdhanMadhab(),
-                            highLatitudeRule = userPrefs.highLatitudeRule.toAdhanRule()
-                        )
-
-                        val dailyTimes = calculationEngine.computeDailyTimes(
-                            date = localDate,
-                            coordinates = coordinates,
-                            parameters = params,
-                            manualOffsets = userPrefs.manualMinuteOffsets
-                        )
-
-                        val window = calculationEngine.getPrayerWindow(
-                            timestampEpochMillis = nowMillis,
-                            coordinates = coordinates,
-                            parameters = params,
-                            timeZone = timeZone,
-                            manualOffsets = userPrefs.manualMinuteOffsets,
-                            ishaExpiresAtMidnight = userPrefs.ishaExpiresAtMidnight
-                        )
-
-                        val isFriday = localDate.dayOfWeek == DayOfWeek.FRIDAY
-                        val nextPrayer = window.nextPrayer
-                        val nextPrayerTimeMillis = dailyTimes.upcomingTimeFor(nextPrayer, nowMillis)
-                        val nextPrayerFormatted = PrayerViewModel.formatTimeOfDay(nextPrayerTimeMillis, timeZone)
-
-                        val remainingMillis = (nextPrayerTimeMillis - nowMillis).coerceAtLeast(0L)
-                        val remainingMinutes = remainingMillis / 60_000L
-                        val countdownStr = if (remainingMinutes >= 60) {
-                            val hours = remainingMinutes / 60
-                            val mins = remainingMinutes % 60
-                            "in ${hours}h ${mins}m"
-                        } else {
-                            "in ${remainingMinutes}m"
-                        }
-
-                        val title = "Next: ${nextPrayer.displayName(isFriday)} at $nextPrayerFormatted"
-                        val subtitle = when (window) {
-                            is PrayerWindow.Active -> "${window.currentPrayer.displayName(isFriday)} window closes $countdownStr"
-                            is PrayerWindow.SunriseInterval -> "Sunrise period • ${if (isFriday) "Jumu'ah" else "Dhuhr"} $countdownStr"
-                        }
+                        val (title, subtitle) = computeStatusTitleAndSubtitle(userPrefs, calculationEngine)
 
                         if (title != lastTitle || subtitle != lastSubtitle) {
                             lastTitle = title
                             lastSubtitle = subtitle
-                            val notification = buildStatusNotification(title, subtitle)
+                            val notification = buildStatusNotification(this@PinnedPrayerStatusService, title, subtitle)
                             val notificationManager =
                                 getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
                             notificationManager.notify(NOTIFICATION_ID, notification)
@@ -183,47 +143,6 @@ class PinnedPrayerStatusService : Service() {
                 delay(60_000L)
             }
         }
-    }
-
-    private fun buildStatusNotification(title: String, subtitle: String): Notification {
-        val launchIntent = Intent(this, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
-        }
-
-        val contentPendingIntent = PendingIntent.getActivity(
-            this,
-            0,
-            launchIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-
-        return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle(title)
-            .setContentText(subtitle)
-            .setSmallIcon(R.drawable.ic_stat_hayya)
-            .setContentIntent(contentPendingIntent)
-            .setOngoing(true)
-            .setOnlyAlertOnce(true)
-            .setShowWhen(false)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
-            .setCategory(NotificationCompat.CATEGORY_STATUS)
-            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            .build()
-    }
-
-    private fun ensureNotificationChannel() {
-        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        val channel = NotificationChannel(
-            CHANNEL_ID,
-            "Pinned Prayer Status",
-            NotificationManager.IMPORTANCE_LOW
-        ).apply {
-            description = "Minimalist ongoing status notification anchoring prayer alarms in memory"
-            setShowBadge(false)
-            enableVibration(false)
-            setSound(null, null)
-        }
-        notificationManager.createNotificationChannel(channel)
     }
 
     override fun onDestroy() {
@@ -270,11 +189,151 @@ class PinnedPrayerStatusService : Service() {
             }
         }
 
+        /**
+         * Attempts to start the pinned foreground service; if Android 12–16 background FGS
+         * restrictions block it (e.g. from BOOT_COMPLETED/TIME_SET), posts a static ongoing
+         * status notification directly instead of failing silently.
+         */
+        fun startOrPostFallback(context: Context, userPrefs: UserPreferences) {
+            val intent = Intent(context, PinnedPrayerStatusService::class.java).apply {
+                action = ACTION_START
+            }
+            try {
+                context.startForegroundService(intent)
+            } catch (e: Exception) {
+                Log.w(TAG, "Background FGS start disallowed; posting pinned status notification fallback", e)
+                postStatusNotificationFallback(context, userPrefs)
+            }
+        }
+
+        fun postStatusNotificationFallback(context: Context, userPrefs: UserPreferences) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+            ) {
+                return
+            }
+            runCatching {
+                ensureNotificationChannel(context)
+                val (title, subtitle) = computeStatusTitleAndSubtitle(userPrefs, PrayerCalculationEngine())
+                val notification = buildStatusNotification(context, title, subtitle)
+                NotificationManagerCompat.from(context).notify(NOTIFICATION_ID, notification)
+            }.onFailure { err ->
+                Log.w(TAG, "Failed posting fallback status notification", err)
+            }
+        }
+
         fun stop(context: Context) {
             val intent = Intent(context, PinnedPrayerStatusService::class.java).apply {
                 action = ACTION_STOP
             }
-            context.startService(intent)
+            try {
+                context.startService(intent)
+            } catch (e: Exception) {
+                Log.w(TAG, "Unable to stop PinnedPrayerStatusService via startService", e)
+            }
+            runCatching {
+                NotificationManagerCompat.from(context).cancel(NOTIFICATION_ID)
+            }
+        }
+
+        private fun computeStatusTitleAndSubtitle(
+            userPrefs: UserPreferences,
+            calculationEngine: PrayerCalculationEngine
+        ): Pair<String, String> {
+            val nowMillis = Clock.System.now().toEpochMilliseconds()
+            val timeZone = TimeZone.currentSystemDefault()
+            val localDate = Instant.fromEpochMilliseconds(nowMillis).toLocalDateTime(timeZone).date
+
+            val coordinates = Coordinates(userPrefs.location.latitude, userPrefs.location.longitude)
+            val params = calculationEngine.createParameters(
+                method = userPrefs.calculationMethod.toAdhanMethod(),
+                madhab = userPrefs.madhab.toAdhanMadhab(),
+                highLatitudeRule = userPrefs.highLatitudeRule.toAdhanRule()
+            )
+
+            val dailyTimes = calculationEngine.computeDailyTimes(
+                date = localDate,
+                coordinates = coordinates,
+                parameters = params,
+                manualOffsets = userPrefs.manualMinuteOffsets
+            )
+
+            val window = calculationEngine.getPrayerWindow(
+                timestampEpochMillis = nowMillis,
+                coordinates = coordinates,
+                parameters = params,
+                timeZone = timeZone,
+                manualOffsets = userPrefs.manualMinuteOffsets,
+                ishaExpiresAtMidnight = userPrefs.ishaExpiresAtMidnight
+            )
+
+            val isFriday = localDate.dayOfWeek == DayOfWeek.FRIDAY
+            val nextPrayer = window.nextPrayer
+            val nextPrayerTimeMillis = dailyTimes.upcomingTimeFor(nextPrayer, nowMillis)
+            val nextPrayerFormatted = PrayerViewModel.formatTimeOfDay(nextPrayerTimeMillis, timeZone)
+
+            val remainingMillis = (nextPrayerTimeMillis - nowMillis).coerceAtLeast(0L)
+            val remainingMinutes = remainingMillis / 60_000L
+            val countdownStr = if (remainingMinutes >= 60) {
+                val hours = remainingMinutes / 60
+                val mins = remainingMinutes % 60
+                "in ${hours}h ${mins}m"
+            } else {
+                "in ${remainingMinutes}m"
+            }
+
+            val title = "Next: ${nextPrayer.displayName(isFriday)} at $nextPrayerFormatted"
+            val subtitle = when (window) {
+                is PrayerWindow.Active -> "${window.currentPrayer.displayName(isFriday)} window closes $countdownStr"
+                is PrayerWindow.SunriseInterval -> "Sunrise period • ${if (isFriday) "Jumu'ah" else "Dhuhr"} $countdownStr"
+            }
+            return title to subtitle
+        }
+
+        private fun buildStatusNotification(
+            context: Context,
+            title: String,
+            subtitle: String
+        ): Notification {
+            val launchIntent = Intent(context, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            }
+
+            val contentPendingIntent = PendingIntent.getActivity(
+                context,
+                0,
+                launchIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+
+            return NotificationCompat.Builder(context, CHANNEL_ID)
+                .setContentTitle(title)
+                .setContentText(subtitle)
+                .setSmallIcon(R.drawable.ic_stat_hayya)
+                .setContentIntent(contentPendingIntent)
+                .setOngoing(true)
+                .setOnlyAlertOnce(true)
+                .setShowWhen(false)
+                .setPriority(NotificationCompat.PRIORITY_LOW)
+                .setCategory(NotificationCompat.CATEGORY_STATUS)
+                .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+                .build()
+        }
+
+        private fun ensureNotificationChannel(context: Context) {
+            val notificationManager =
+                context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager ?: return
+            val channel = NotificationChannel(
+                CHANNEL_ID,
+                "Pinned Prayer Status",
+                NotificationManager.IMPORTANCE_LOW
+            ).apply {
+                description = "Minimalist ongoing status notification anchoring prayer alarms in memory"
+                setShowBadge(false)
+                enableVibration(false)
+                setSound(null, null)
+            }
+            notificationManager.createNotificationChannel(channel)
         }
     }
 }

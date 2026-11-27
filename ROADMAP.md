@@ -2,20 +2,24 @@
 
 This document tracks known issues and the upcoming feature roadmap for **Hayya**.
 
-> **Current Release (`1.1.0`):** Offline-first prayer times, Doze-resilient exact alarms, Mosque Auto-Silent, Companion tools, 5 Glance AppWidgets, Multilingual Hadith Hub, and GitHub Releases In-App Updater — calibrated for **Pakistan (Larkana Division)**.
+> **Current Release (`1.1.0` + Main Security/Reliability Hardening):** Offline-first prayer times, Doze-resilient exact alarms, Mosque Auto-Silent, Companion tools, 5 Glance AppWidgets, Multilingual Hadith Hub, and fail-closed GitHub Releases In-App Updater — calibrated for **Pakistan (Larkana Division)** with regional Hijri moonsighting offset (`-2d` to `+2d`).
 
 ---
 
-## Resolved Issues (`v1.1.0`)
+## Resolved Issues (`v1.1.0` & Audit Hardening)
 
-1. **Post-Adhan Dua Sheet Closes on Auto-Silence Timeout** *(Fixed)*
-   - `PrayerWakeActivity` now defers `finish()` on `ACTION_PLAYBACK_FINISHED` while the **Dua After Adhan** bottom sheet is open and closes cleanly once dismissed.
-2. **Pinned Status Notification Friday Label & Service Lifecycle Polish** *(Fixed)*
-   - `PinnedPrayerStatusService` now formats Friday Dhuhr as `JUMU'AH`, refreshes via `ACTION_REFRESH` without resetting notification text, and `MainActivity` guards `stop()` with `isRunning`.
-3. **Static Calculation Authority Label in Settings** *(Fixed)*
-   - `SettingsScreen` (`CalculationSubScreen`) now binds `userPreferences.calculationMethod.displayName` dynamically.
-4. **Kotlin & Layout Lint Polish** *(Fixed)*
-   - Resolved `ModifierParameter`, `ObsoleteSdkInt`, and `DisableBaselineAlignment` Android Lint warnings.
+1. **Alarm Notification & Foreground Service Isolation** *(Fixed)*
+   - `PrayerAudioService` now uses dedicated notification IDs/action `PendingIntent` request codes (`FOREGROUND_NOTIFICATION_ID`), preserves `CHANNEL_MAIN_CALL` / Suhoor wake extras, honors `AudioFocus`, suppresses loud Adhan during active voice/VoIP calls, and scopes `ACTION_PLAYBACK_FINISHED` by notification ID without forcing unnecessary keyguard unlock prompts.
+2. **Fail-Closed In-App Updater & Opt-Out Control** *(Fixed)*
+   - `AppUpdateEngine` enforces fail-closed SHA-256 verification and strict HTTPS GitHub host allowlisting across redirects and browser fallbacks, alongside a user-facing **Auto-Check Updates on Launch** toggle in Settings.
+3. **Background Broadcast ANR, FGS Fallback & Auto-Mute Recovery** *(Fixed)*
+   - `SystemClockChangedReceiver` validates exported actions, stays within an 8s `goAsync()`/`WakeLock` budget, falls back to direct status notifications if Android 12–16 disallows background `specialUse` FGS start, and `PrayerAlarmScheduler` clears prior/shifted alarm windows across backward clock jumps. `AutoMuteManager` preserves saved ringer state and surfaces an actionable notification if DND access is revoked.
+4. **Widget Fan-Out, Countdown Recomposition & SQLite FTS4 Scaling** *(Fixed)*
+   - Removed duplicate `ACTION_PRAYER_DATA_CHANGED` filters from individual widget receivers (eliminating `25x` refresh fan-out), isolated 1-second `countdownState` ticks from `MainActivity` root, added `hadith_fts_map` (`docid` deletes) + safe FTS4/`LIKE` query escaping, sequential collection indexing in `FawazHadithSyncClient`, and resumable HadeethEnc `syncedPages` checkpoints.
+5. **True-North Qibla Calibration, Regional Hijri Offset & RTL/Accessibility** *(Fixed)*
+   - Added `GeomagneticField` declination compensation + `ON_PAUSE` sensor release in Qibla, `-2..+2` day Hijri moonsighting offset for Pakistan/Larkana Ruet-e-Hilal, shared `ArabicScriptText` (`Noto Naskh Arabic` + RTL) across all Arabic screens/cards, safe canvas clipping/RTL direction in `HadithStatusCardRenderer`, and `48dp`/responsive `320dp` layout improvements.
+6. **Post-Adhan Dua Sheet & Lint Polish** *(Fixed)*
+   - Resolved `PrayerWakeActivity` Dua sheet dismissal deferral, `PinnedPrayerStatusService` Friday label, `SettingsScreen` dynamic method label, and `ObsoleteSdkInt` (`mipmap-anydpi`).
 
 ---
 

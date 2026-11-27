@@ -328,12 +328,15 @@ object IslamicCalendarHelper {
     }
 
     /**
-     * Resolves the full [IslamicDateInfo] for a given Gregorian [LocalDate].
+     * Resolves the full [IslamicDateInfo] for a given Gregorian [LocalDate], applying an optional
+     * regional moonsighting adjustment [hijriOffsetDays] (`-2..+2`).
      */
-    fun resolveIslamicDate(date: LocalDate): IslamicDateInfo {
+    fun resolveIslamicDate(date: LocalDate, hijriOffsetDays: Int = 0): IslamicDateInfo {
         return try {
+            val clampedOffset = hijriOffsetDays.coerceIn(-2, 2).toLong()
             val javaDate = java.time.LocalDate.of(date.year, date.monthNumber, date.dayOfMonth)
-            val hijrahDate = HijrahDate.from(javaDate)
+            val adjustedJavaDate = javaDate.plusDays(clampedOffset)
+            val hijrahDate = HijrahDate.from(adjustedJavaDate)
 
             val hijriDay = hijrahDate.get(ChronoField.DAY_OF_MONTH)
             val hijriMonth = hijrahDate.get(ChronoField.MONTH_OF_YEAR)
@@ -354,7 +357,7 @@ object IslamicCalendarHelper {
             val daysUntilRamadan = if (hijriMonth == 9) {
                 0
             } else {
-                estimateDaysUntilRamadan(javaDate, hijriYear, hijriMonth)
+                estimateDaysUntilRamadan(adjustedJavaDate, hijriYear, hijriMonth)
             }
 
             IslamicDateInfo(
@@ -368,27 +371,29 @@ object IslamicCalendarHelper {
                 daysUntilRamadan = daysUntilRamadan
             )
         } catch (e: Exception) {
-            // Graceful fallback for unexpected chronologic errors
+            // Neutral non-Ramadan fallback on unexpected chronologic errors
             IslamicDateInfo(
                 gregorianDate = date,
                 hijriDay = 1,
-                hijriMonth = 9,
+                hijriMonth = 1,
                 hijriYear = 1447,
-                hijriMonthName = "Ramadan",
-                formattedHijriDate = "Ramadan 1447 AH",
-                activeEvent = IslamicEvent.RAMADAN,
+                hijriMonthName = "Muharram",
+                formattedHijriDate = "1 Muharram 1447 AH",
+                activeEvent = IslamicEvent.NONE,
                 daysUntilRamadan = 0
             )
         }
     }
 
     /**
-     * Finds the Gregorian [LocalDate] for the 1st of Ramadan of the given [hijriYear].
+     * Finds the Gregorian [LocalDate] for the 1st of Ramadan of the given [hijriYear],
+     * accounting for an optional regional moonsighting offset [hijriOffsetDays] (`-2..+2`).
      */
-    fun getRamadanStartDate(hijriYear: Int): LocalDate {
+    fun getRamadanStartDate(hijriYear: Int, hijriOffsetDays: Int = 0): LocalDate {
         return try {
+            val clampedOffset = hijriOffsetDays.coerceIn(-2, 2).toLong()
             val ramadan1 = HijrahChronology.INSTANCE.date(hijriYear, 9, 1)
-            val gregorian = java.time.LocalDate.from(ramadan1)
+            val gregorian = java.time.LocalDate.from(ramadan1).minusDays(clampedOffset)
             LocalDate(gregorian.year, gregorian.monthValue, gregorian.dayOfMonth)
         } catch (e: Exception) {
             LocalDate(2026, 2, 18) // Safe fallback

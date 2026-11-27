@@ -151,7 +151,8 @@ data class HadithCategorySyncInfo(
     val title: String,
     val pillar: HadithPillar,
     val remoteCount: Int,
-    val syncedCount: Int
+    val syncedCount: Int,
+    val syncedPages: Int = 0
 )
 
 /**

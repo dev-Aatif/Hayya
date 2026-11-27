@@ -199,6 +199,58 @@ class AppUpdateEngineTest {
     }
 
     @Test
+    fun downloadAndVerifyApk_failsClosed_whenSha256AssetUrlIsMissing() = runTest {
+        val apkBytes = "fake-apk-binary-payload".toByteArray()
+        val releaseWithoutSha = AppReleaseInfo(
+            tagName = "v1.1.0",
+            versionName = "1.1.0",
+            title = "Hayya v1.1.0",
+            releaseNotes = "",
+            htmlUrl = "https://github.com/dev-Aatif/Hayya/releases/tag/v1.1.0",
+            apkDownloadUrl = "https://github.com/dev-Aatif/Hayya/releases/download/v1.1.0/Hayya-v1.1.0.apk",
+            apkAssetName = "Hayya-v1.1.0.apk",
+            apkSizeBytes = apkBytes.size.toLong(),
+            sha256AssetUrl = null
+        )
+        val engine = AppUpdateEngine(
+            context = context,
+            httpTransport = FakeTransport(downloadPayload = apkBytes),
+            currentVersionProvider = { "1.0.0" }
+        )
+
+        val result = engine.downloadAndVerifyApk(releaseWithoutSha) {}
+        assertThat(result.isFailure).isTrue()
+        assertThat(File(cacheDir, "updates/Hayya-v1.1.0.apk").exists()).isFalse()
+    }
+
+    @Test
+    fun downloadAndVerifyApk_rejectsUntrustedHosts() = runTest {
+        val evilRelease = AppReleaseInfo(
+            tagName = "v1.1.0",
+            versionName = "1.1.0",
+            title = "Hayya v1.1.0",
+            releaseNotes = "",
+            htmlUrl = "https://github.com/dev-Aatif/Hayya/releases/tag/v1.1.0",
+            apkDownloadUrl = "https://evil.example.com/Hayya-v1.1.0.apk",
+            apkAssetName = "Hayya-v1.1.0.apk",
+            apkSizeBytes = 128L,
+            sha256AssetUrl = "https://github.com/dev-Aatif/Hayya/releases/download/v1.1.0/Hayya-v1.1.0.apk.sha256"
+        )
+        val engine = AppUpdateEngine(
+            context = context,
+            httpTransport = FakeTransport(downloadPayload = byteArrayOf(1, 2, 3)),
+            currentVersionProvider = { "1.0.0" }
+        )
+
+        assertThat(engine.downloadAndVerifyApk(evilRelease) {}.isFailure).isTrue()
+        assertThat(AppUpdateEngine.isAllowedUpdateUrl("https://api.github.com/repos/dev-Aatif/Hayya/releases/latest")).isTrue()
+        assertThat(AppUpdateEngine.isAllowedUpdateUrl("https://objects.githubusercontent.com/github-production-release-asset/foo.apk")).isTrue()
+        assertThat(AppUpdateEngine.isAllowedUpdateUrl("http://github.com/dev-Aatif/Hayya")).isFalse()
+        assertThat(AppUpdateEngine.isAllowedUpdateUrl("https://github.com@evil.com/Hayya.apk")).isFalse()
+        assertThat(AppUpdateEngine.isAllowedUpdateUrl("https://evil.com/Hayya.apk")).isFalse()
+    }
+
+    @Test
     fun sanitizeApkFileName_preventsPathTraversal() {
         assertThat(AppUpdateEngine.sanitizeApkFileName("../../evil.apk")).isEqualTo("evil.apk")
         assertThat(AppUpdateEngine.sanitizeApkFileName("Hayya-v1.0.1.apk")).isEqualTo("Hayya-v1.0.1.apk")

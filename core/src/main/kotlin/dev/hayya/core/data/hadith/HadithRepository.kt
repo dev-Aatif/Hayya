@@ -93,6 +93,7 @@ class HadithRepository(
         )
         return fetchResult.map { entries ->
             database.upsertHadiths(entries)
+            database.markCategoryPageSynced(category.id, page)
             entries.size
         }
     }

@@ -3,20 +3,28 @@ package dev.hayya.core.ui.theme
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.ExperimentalTextApi
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontVariation
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDirection
+import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.sp
 import dev.hayya.core.R
 import dev.hayya.core.domain.model.PrayerType
@@ -226,4 +234,35 @@ fun HayyaTheme(
         dynamicColor = false,
         content = content
     )
+}
+
+/**
+ * Shared RTL Arabic/Urdu/Sindhi script text rendering with [ArabicScriptFontFamily] (`Noto Naskh Arabic`)
+ * so Duas, Adhkar, Eid Takbirat, and Hadiths render consistently across every screen.
+ */
+@Composable
+fun ArabicScriptText(
+    text: String,
+    modifier: Modifier = Modifier,
+    color: Color = MaterialTheme.colorScheme.onSurface,
+    fontSize: TextUnit = 22.sp,
+    lineHeight: TextUnit = 38.sp,
+    fontWeight: FontWeight = FontWeight.Normal,
+    textAlign: TextAlign = TextAlign.Start
+) {
+    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+        Text(
+            text = text,
+            modifier = modifier,
+            style = TextStyle(
+                fontFamily = ArabicScriptFontFamily,
+                fontSize = fontSize,
+                lineHeight = lineHeight,
+                fontWeight = fontWeight,
+                color = color,
+                textAlign = textAlign,
+                textDirection = TextDirection.Rtl
+            )
+        )
+    }
 }

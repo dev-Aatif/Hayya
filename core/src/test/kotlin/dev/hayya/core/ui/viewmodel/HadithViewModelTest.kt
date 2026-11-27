@@ -183,4 +183,34 @@ class HadithViewModelTest {
             vm.viewModelScope.cancel()
         }
     }
+
+    @Test
+    fun syncCategory_advancesUsingSyncedPages_evenWhenPartialBatchSavedFewerThanTwenty() = runTest(testDispatcher) {
+        val partialCategory = HadithCategorySyncInfo(
+            id = "40",
+            title = "Virtues",
+            pillar = HadithPillar.VIRTUES,
+            remoteCount = 60,
+            syncedCount = 17,
+            syncedPages = 1
+        )
+        coEvery { syncClient.fetchCategoryBatch(partialCategory, page = 2, perPage = 20, any()) } returns Result.success(emptyList())
+
+        val repository = HadithRepository(database, prefsRepo, syncClient, bookSyncClient)
+        val vm = HadithViewModel(
+            repository = repository,
+            alarmScheduler = mockk(relaxed = true)
+        )
+        try {
+            testDispatcher.scheduler.runCurrent()
+            vm.syncCategory(partialCategory)
+            testDispatcher.scheduler.runCurrent()
+
+            coVerify(exactly = 1) {
+                syncClient.fetchCategoryBatch(partialCategory, page = 2, perPage = 20, any())
+            }
+        } finally {
+            vm.viewModelScope.cancel()
+        }
+    }
 }

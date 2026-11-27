@@ -23,6 +23,8 @@ import androidx.glance.layout.fillMaxSize
 import androidx.glance.layout.padding
 import androidx.glance.layout.size
 import androidx.glance.layout.width
+import androidx.glance.semantics.contentDescription
+import androidx.glance.semantics.semantics
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
@@ -105,15 +107,16 @@ class NextPrayerBannerWidget : GlanceAppWidget() {
                                 val isDone = snapshot.completedPrayers.contains(prayer)
                                 val isNext = snapshot.nextPrayerType == prayer
                                 val initial = WidgetTheme.compactInitial(prayer, snapshot.isFriday)
+                                val shortLabel = WidgetTheme.shortPrayerLabel(prayer, snapshot.isFriday)
 
                                 if (index > 0) {
-                                    Spacer(modifier = GlanceModifier.width(4.dp))
+                                    Spacer(modifier = GlanceModifier.width(2.dp))
                                 }
 
                                 Box(
                                     modifier = GlanceModifier
-                                        .size(28.dp)
-                                        .cornerRadius(14.dp)
+                                        .size(34.dp)
+                                        .cornerRadius(17.dp)
                                         .background(
                                             when {
                                                 isDone -> palette.accent
@@ -121,6 +124,13 @@ class NextPrayerBannerWidget : GlanceAppWidget() {
                                                 else -> palette.surfaceElevated
                                             }
                                         )
+                                        .semantics {
+                                            contentDescription = if (isDone) {
+                                                "$shortLabel prayed"
+                                            } else {
+                                                "Mark $shortLabel prayed"
+                                            }
+                                        }
                                         .clickable(
                                             actionRunCallback<TogglePrayerActionCallback>(
                                                 actionParametersOf(

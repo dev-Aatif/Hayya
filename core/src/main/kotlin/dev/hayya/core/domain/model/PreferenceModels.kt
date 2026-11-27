@@ -329,6 +329,8 @@ data class UserPreferences(
     val tasbihCount: Int = 0,
     val tasbihMode: TasbihTargetMode = TasbihTargetMode.FATIMA_100,
     val salawatCount: Int = 0,
+    val hijriDayOffsetDays: Int = 0,
+    val autoCheckUpdatesEnabled: Boolean = true,
     val lastUpdateCheckEpochMillis: Long = 0L,
     val lastNotifiedUpdateVersion: String? = null
 ) {

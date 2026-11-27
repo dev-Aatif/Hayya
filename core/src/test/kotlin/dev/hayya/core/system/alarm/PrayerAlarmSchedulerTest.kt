@@ -575,4 +575,38 @@ class PrayerAlarmSchedulerTest {
             mockHadithPi.cancel()
         }
     }
+
+    @Test
+    fun cancelAllScheduledAlarms_probesPriorWindowForBackwardClockJumps() {
+        val today = LocalDate(2026, 6, 10)
+        val mockPi = mockk<PendingIntent>(relaxed = true)
+        val threeDaysEarlierId = ScheduledAlert.createNotificationId(
+            LocalDate(2026, 6, 7).dayOfYear,
+            PrayerType.FAJR,
+            AlertTier.MAIN_CALL
+        )
+        every {
+            PendingIntent.getBroadcast(
+                context,
+                any(),
+                any<Intent>(),
+                PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE
+            )
+        } returns null
+        every {
+            PendingIntent.getBroadcast(
+                context,
+                threeDaysEarlierId,
+                any<Intent>(),
+                PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE
+            )
+        } returns mockPi
+
+        scheduler.cancelAllScheduledAlarms(startDate = today, daysAhead = 7, daysBack = 7)
+
+        verify(atLeast = 1) {
+            alarmManager.cancel(mockPi)
+            mockPi.cancel()
+        }
+    }
 }

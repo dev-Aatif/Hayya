@@ -14,6 +14,7 @@ import android.graphics.Typeface
 import android.net.Uri
 import android.text.Layout
 import android.text.StaticLayout
+import android.text.TextDirectionHeuristics
 import android.text.TextPaint
 import androidx.core.content.FileProvider
 import androidx.core.content.res.ResourcesCompat
@@ -172,11 +173,17 @@ object HadithStatusCardRenderer {
             }
 
             val aLayout = if (arabicText.isNotEmpty()) {
-                buildStaticLayout(arabicText, arabicPaint, contentWidth, lineMult = 1.32f)
+                buildStaticLayout(arabicText, arabicPaint, contentWidth, lineMult = 1.32f, isRtl = true)
             } else {
                 null
             }
-            val tLayout = buildStaticLayout(translationText, transPaint, contentWidth, lineMult = 1.28f)
+            val tLayout = buildStaticLayout(
+                translationText,
+                transPaint,
+                contentWidth,
+                lineMult = 1.28f,
+                isRtl = resolved.language.isRtl
+            )
             val gap = if (aLayout != null) 30 else 0
             val totalHeight = (aLayout?.height ?: 0) + gap + tLayout.height
             if (totalHeight <= availableBodyMax || scale <= 0.44f) {
@@ -239,11 +246,14 @@ object HadithStatusCardRenderer {
             topicPaint
         )
 
-        // 5. Centered Arabic + Translation body
+        // 5. Centered Arabic + Translation body (clipped strictly above footer)
         val bodyAreaTop = barTop + headerHeight + 28f
         val bodyAreaBottom = cardRect.bottom - innerPadBottom - footerHeight - 28f
         val bodyAreaHeight = (bodyAreaBottom - bodyAreaTop).coerceAtLeast(bodyHeight.toFloat())
         var cursorY = bodyAreaTop + ((bodyAreaHeight - bodyHeight).coerceAtLeast(0f) / 2f)
+
+        canvas.save()
+        canvas.clipRect(cardRect.left, bodyAreaTop, cardRect.right, bodyAreaBottom)
 
         if (arabicLayout != null) {
             canvas.save()
@@ -256,6 +266,8 @@ object HadithStatusCardRenderer {
         canvas.save()
         canvas.translate(contentLeft, cursorY)
         translationLayout.draw(canvas)
+        canvas.restore()
+
         canvas.restore()
 
         // 6. Clean citation footer (no promotional bottom CTA)
@@ -342,10 +354,17 @@ object HadithStatusCardRenderer {
         text: String,
         paint: TextPaint,
         width: Int,
-        lineMult: Float = 1.2f
+        lineMult: Float = 1.2f,
+        isRtl: Boolean = false
     ): StaticLayout {
+        val textDirection = if (isRtl) {
+            TextDirectionHeuristics.RTL
+        } else {
+            TextDirectionHeuristics.FIRSTSTRONG_LTR
+        }
         return StaticLayout.Builder.obtain(text, 0, text.length, paint, width)
             .setAlignment(Layout.Alignment.ALIGN_CENTER)
+            .setTextDirection(textDirection)
             .setLineSpacing(0f, lineMult)
             .setIncludePad(false)
             .build()

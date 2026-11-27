@@ -61,6 +61,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontStyle
@@ -73,6 +74,7 @@ import androidx.compose.ui.unit.sp
 import dev.hayya.core.domain.model.PostAdhanDua
 import dev.hayya.core.domain.model.PrayerType
 import dev.hayya.core.ui.components.PrayerCelestialIcon
+import dev.hayya.core.ui.theme.ArabicScriptText
 import dev.hayya.core.ui.theme.HayyaTheme
 import dev.hayya.core.ui.theme.LockscreenWakeBackground
 import dev.hayya.core.ui.theme.SoraFontFamily
@@ -217,12 +219,16 @@ fun PrayerWakeScreen(
 
                     Spacer(modifier = Modifier.height(6.dp))
 
+                    val screenWidthDp = LocalConfiguration.current.screenWidthDp
+                    val wakeTitleSize = if (screenWidthDp < 360) 40.sp else 54.sp
                     Text(
                         text = prayerName.uppercase(),
                         fontFamily = SoraFontFamily,
                         fontWeight = FontWeight.Bold,
-                        fontSize = 54.sp,
+                        fontSize = wakeTitleSize,
                         letterSpacing = 4.sp,
+                        maxLines = 2,
+                        textAlign = TextAlign.Center,
                         color = MaterialTheme.colorScheme.onSurface
                     )
 
@@ -355,7 +361,7 @@ private fun PostAdhanDuaBottomSheet(onDismiss: () -> Unit) {
                 shape = RoundedCornerShape(18.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
             ) {
-                Text(
+                ArabicScriptText(
                     text = PostAdhanDua.ARABIC_TEXT,
                     fontSize = 22.sp,
                     lineHeight = 38.sp,

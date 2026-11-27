@@ -66,6 +66,10 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.LayoutDirection
@@ -110,16 +114,20 @@ fun HadithReaderModalSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp)
                 .padding(bottom = 24.dp)
         ) {
-            // Toolbar: language pills + font controls + actions
-            Row(
+            // Toolbar: language pills + font controls + actions (wraps gracefully at 320dp / high fontScale)
+            FlowRow(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
                     HadithLanguage.entries.forEach { lang ->
                         val selected = preferences.preferredLanguage == lang
                         Surface(
@@ -143,7 +151,7 @@ fun HadithReaderModalSheet(
                                         MaterialTheme.colorScheme.onSurfaceVariant
                                     }
                                 ),
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp)
                             )
                         }
                     }
@@ -362,6 +370,7 @@ fun HadithReaderModalSheet(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun HadithShareSheet(
     entry: HadithEntry,
@@ -390,14 +399,11 @@ fun HadithShareSheet(
                 aspect = selectedAspect
             )
         }
-        val old = previewBitmap
         previewBitmap = rendered
-        old?.recycle()
     }
 
     DisposableEffect(Unit) {
         onDispose {
-            previewBitmap?.recycle()
             previewBitmap = null
         }
     }
@@ -448,6 +454,7 @@ fun HadithShareSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp)
                 .padding(bottom = 18.dp),
             horizontalAlignment = Alignment.CenterHorizontally
@@ -539,13 +546,13 @@ fun HadithShareSheet(
             Spacer(modifier = Modifier.height(14.dp))
 
             // Single Compact Control Bar: Theme Swatches + Aspect + Arabic Toggle
-            Row(
+            FlowRow(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(2.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     ShareCardTheme.entries.forEach { theme ->
@@ -562,23 +569,34 @@ fun HadithShareSheet(
                         }
                         Box(
                             modifier = Modifier
-                                .size(34.dp)
+                                .size(48.dp)
                                 .clip(CircleShape)
-                                .background(swatchColor)
-                                .border(
-                                    width = if (selected) 2.5.dp else 1.dp,
-                                    color = if (selected) accentColor else MaterialTheme.colorScheme.outlineVariant,
-                                    shape = CircleShape
-                                )
-                                .clickable { selectedTheme = theme },
+                                .clickable { selectedTheme = theme }
+                                .semantics {
+                                    role = Role.RadioButton
+                                    contentDescription = "Card theme ${theme.label}"
+                                },
                             contentAlignment = Alignment.Center
                         ) {
                             Box(
                                 modifier = Modifier
-                                    .size(10.dp)
+                                    .size(34.dp)
                                     .clip(CircleShape)
-                                    .background(accentColor)
-                            )
+                                    .background(swatchColor)
+                                    .border(
+                                        width = if (selected) 2.5.dp else 1.dp,
+                                        color = if (selected) accentColor else MaterialTheme.colorScheme.outlineVariant,
+                                        shape = CircleShape
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(10.dp)
+                                        .clip(CircleShape)
+                                        .background(accentColor)
+                                )
+                            }
                         }
                     }
                 }
